@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class NamedEntityRecognition(nn.Module):
+class BiLSTMConv(nn.Module):
     def __init__(self, embeddings: torch.Tensor, output_size: int, batch_size: int, char_count: int,
                  max_word_length: int, char_embedding_size: int):
         super().__init__()

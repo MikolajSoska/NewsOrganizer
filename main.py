@@ -6,7 +6,7 @@ import torch.nn as nn
 from sklearn.metrics import f1_score
 
 from dataloader import NERDataset, NERDataLoader
-from model import NamedEntityRecognition
+from model.ner.bilstm_cnn import BiLSTMConv
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -18,9 +18,9 @@ batch_size = 9
 dataset = NERDataset('data/ner_dataset.csv', embedding='glove.6B.50d')
 loader = NERDataLoader(dataset, batch_size=batch_size)
 
-model = NamedEntityRecognition(embeddings=dataset.vocab.vectors, output_size=dataset.labels_count,
-                               batch_size=batch_size, char_count=dataset.char_count,
-                               max_word_length=dataset.max_word_length, char_embedding_size=25)
+model = BiLSTMConv(embeddings=dataset.vocab.vectors, output_size=dataset.labels_count,
+                   batch_size=batch_size, char_count=dataset.char_count,
+                   max_word_length=dataset.max_word_length, char_embedding_size=25)
 model.cuda()
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
