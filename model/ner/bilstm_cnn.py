@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import model.utils as utils
 
 
 class BiLSTMConv(nn.Module):
@@ -15,21 +16,21 @@ class BiLSTMConv(nn.Module):
         self.char_network = nn.Sequential(
             nn.Flatten(start_dim=0, end_dim=1),
             nn.Embedding(char_count, char_embedding_size, padding_idx=0),
-            Permute(0, 2, 1),
+            utils.Permute(0, 2, 1),
             char_conv,
             nn.MaxPool1d(conv_len_out),
-            View(-1, self.batch_size, self.char_features_size)
+            utils.View(-1, self.batch_size, self.char_features_size)
         )
 
         self.word_embedding = nn.Embedding.from_pretrained(embeddings, freeze=False, padding_idx=0)
         self.lstm = nn.LSTM(input_size=50 + self.char_features_size, hidden_size=self.hidden_size, num_layers=1,
                             bidirectional=True)
 
-        self.forward_out = TimeDistributed(nn.Sequential(
+        self.forward_out = utils.TimeDistributed(nn.Sequential(
             nn.Linear(self.hidden_size, output_size),
             nn.LogSoftmax(dim=1)
         ))
-        self.backward_out = TimeDistributed(nn.Sequential(
+        self.backward_out = utils.TimeDistributed(nn.Sequential(
             nn.Linear(self.hidden_size, output_size),
             nn.LogSoftmax(dim=1)
         ))
@@ -60,5 +61,3 @@ class BiLSTMConv(nn.Module):
         x_backward = self.backward_out(x_backward)
 
         return x_forward + x_backward
-
-
