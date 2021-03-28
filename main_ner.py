@@ -59,4 +59,4 @@ for epoch in range(epochs):
             true_tags = []
             pred_tags = []
 
-torch.save(model.state_dict(), 'models/model')
+torch.save(model.state_dict(), 'data/weights/model')
