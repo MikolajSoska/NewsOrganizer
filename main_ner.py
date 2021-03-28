@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
 
-from dataloader import NERDataset, NERDataLoader
+from model.ner.dataloader import NERDataset, NERDataLoader
 from model.ner.bilstm_cnn import BiLSTMConv
 
 torch.manual_seed(0)
