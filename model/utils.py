@@ -32,3 +32,21 @@ class Permute(nn.Module):
 
     def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         return x_in.permute(self.dimensions)
+
+
+class Squeeze(nn.Module):
+    def __init__(self, dimension: int = None):
+        super().__init__()
+        self.dimension = dimension
+
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+        return x_in.squeeze(dim=self.dimension)
+
+
+class Unsqueeze(nn.Module):
+    def __init__(self, dimension: int = None):
+        super().__init__()
+        self.dimension = dimension
+
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+        return x_in.unsqueeze(dim=self.dimension)
