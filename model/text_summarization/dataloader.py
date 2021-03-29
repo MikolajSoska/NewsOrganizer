@@ -6,6 +6,8 @@ from typing import List, Tuple, Iterator
 import datasets
 import torch
 import tqdm
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, T_co
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import Vocab
@@ -86,3 +88,16 @@ class SummarizationDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.__dataset)
+
+
+class SummarizationDataLoader(DataLoader):
+    def __init__(self, dataset: Dataset[T_co], batch_size: int):
+        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
+
+    @staticmethod
+    def __generate_batch(batch: List) -> Tuple[torch.Tensor, torch.Tensor]:
+        texts, summaries = zip(*batch)
+        texts_padded = pad_sequence(texts)
+        summaries_padded = pad_sequence(summaries)
+
+        return texts_padded, summaries_padded
