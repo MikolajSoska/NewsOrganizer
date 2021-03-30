@@ -92,7 +92,7 @@ class SummarizationDataset(Dataset):
 
 class SummarizationDataLoader(DataLoader):
     def __init__(self, dataset: Dataset[T_co], batch_size: int, max_summary_length: int):
-        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch, pin_memory=True)
+        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
         self.max_summary_length = max_summary_length
 
     def __generate_batch(self, batch: List) -> Tuple[torch.Tensor, torch.Tensor]:
