@@ -50,3 +50,24 @@ class Unsqueeze(nn.Module):
 
     def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         return x_in.unsqueeze(dim=self.dimension)
+
+
+class CoverageLoss(nn.Module):
+    def __init__(self, weight: float = 1.0, reduction: str = 'mean'):
+        super().__init__()
+        self.weight = weight
+        if reduction == 'mean':
+            self.reduction = torch.mean
+        elif reduction == 'sum':
+            self.reduction = torch.sum
+        elif reduction == 'none':
+            self.reduction = None
+        else:
+            raise ValueError(f'{reduction} is not a valid value for reduction')
+
+    def forward(self, attention: torch.Tensor, coverage: torch.Tensor) -> torch.Tensor:
+        loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1)
+        if self.reduction is not None:
+            return self.reduction(loss)
+        else:
+            return loss
