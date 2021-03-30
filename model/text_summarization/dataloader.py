@@ -58,8 +58,8 @@ class SummarizationDataset(Dataset):
         for text_tokens, summary_tokens in self.__dataset_tokens_generator(dataset_name):
             text_tokens = [SpecialTokens.BOS.value] + text_tokens + [SpecialTokens.EOS.value]
             summary_tokens = [SpecialTokens.BOS.value] + summary_tokens + [SpecialTokens.EOS.value]
-            text_tensor = torch.tensor([self.__vocab.stoi[token] for token in text_tokens], dtype=torch.int)
-            summary_tensor = torch.tensor([self.__vocab.stoi[token] for token in summary_tokens], dtype=torch.int)
+            text_tensor = torch.tensor([self.__vocab.stoi[token] for token in text_tokens], dtype=torch.long)
+            summary_tensor = torch.tensor([self.__vocab.stoi[token] for token in summary_tokens], dtype=torch.long)
             dataset.append((text_tensor, summary_tensor))
 
         torch.save(dataset, dataset_path)
@@ -91,13 +91,23 @@ class SummarizationDataset(Dataset):
 
 
 class SummarizationDataLoader(DataLoader):
-    def __init__(self, dataset: Dataset[T_co], batch_size: int):
-        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
+    def __init__(self, dataset: Dataset[T_co], batch_size: int, max_summary_length: int):
+        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch, pin_memory=True)
+        self.max_summary_length = max_summary_length
 
-    @staticmethod
-    def __generate_batch(batch: List) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __generate_batch(self, batch: List) -> Tuple[torch.Tensor, torch.Tensor]:
         texts, summaries = zip(*batch)
         texts_padded = pad_sequence(texts)
-        summaries_padded = pad_sequence(summaries)
+        summaries_padded = self.__pad_summaries(summaries)
 
         return texts_padded, summaries_padded
+
+    def __pad_summaries(self, summaries: List[torch.Tensor]) -> torch.Tensor:
+        summaries_padded = pad_sequence(summaries)
+        sequence_length, batch_size = summaries_padded.shape
+        sequence_length = min(sequence_length, self.max_summary_length)
+        zero_mask = torch.zeros((self.max_summary_length, self.batch_size), dtype=torch.long)
+        zero_mask[:sequence_length, :batch_size] = summaries_padded[:sequence_length, :batch_size]
+
+        return zero_mask
+

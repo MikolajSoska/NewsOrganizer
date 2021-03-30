@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,7 @@ import model.utils as utils
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int = 128, hidden_size: int = 256):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True)
@@ -44,7 +44,7 @@ class Encoder(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, hidden_size: int, batch_size: int = 16):
+    def __init__(self, hidden_size: int, batch_size: int):
         super().__init__()
         self.hidden_size = hidden_size
         self.features = nn.Sequential(
@@ -59,7 +59,7 @@ class Attention(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_size * 2, 1),
             utils.View(-1, batch_size),
-            nn.Softmax(dim=1),
+            nn.Softmax(dim=0),
             utils.Permute(1, 0),
             utils.Unsqueeze(1)
         )
@@ -83,10 +83,10 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int = 128, hidden_size: int = 256):
+    def __init__(self, vocab_size: int, batch_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.hidden_size = hidden_size
-        self.attention = Attention(hidden_size)
+        self.attention = Attention(hidden_size, batch_size)
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size)
         self.context = nn.Sequential(
@@ -117,3 +117,35 @@ class Decoder(nn.Module):
         x = self.out(x)
 
         return x, hidden_out, context, attention, coverage_next
+
+
+class PointerGeneratorNetwork(nn.Module):
+    def __init__(self, vocab_size: int, batch_size: int, max_summary_length: int, embedding_dim: int = 128,
+                 hidden_size: int = 256):
+        super().__init__()
+        self.max_summary_length = max_summary_length
+        self.batch_size = batch_size
+        self.hidden_size = hidden_size
+        self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
+        self.decoder = Decoder(vocab_size, batch_size, embedding_dim, hidden_size)
+
+    def forward(self, texts: torch.Tensor,
+                summaries: torch.Tensor) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+        encoder_out, encoder_features, hidden = self.encoder(texts)
+        device = texts.device
+        context = torch.zeros((self.batch_size, 2 * self.hidden_size), device=device)
+        coverage = torch.zeros_like(texts, device=device, dtype=torch.float)
+        outputs = []
+        attention_list = []
+        coverage_list = []
+
+        for i in range(self.max_summary_length):
+            decoder_input = summaries[i, :]
+            decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden,
+                                                                                     encoder_out, encoder_features,
+                                                                                     context, coverage)
+            outputs.append(decoder_out)
+            attention_list.append(attention)
+            coverage_list.append(coverage)
+
+        return outputs, attention_list, coverage_list
