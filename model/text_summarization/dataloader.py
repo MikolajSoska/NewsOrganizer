@@ -35,6 +35,9 @@ class SummarizationDataset(Dataset):
         self.__vocab = self.__build_vocab(dataset_name, vocab_dir)
         self.__dataset = self.__build_dataset(dataset_name, data_dir)
 
+    def get_vocab_size(self) -> int:
+        return len(self.vocab)
+
     def __build_vocab(self, dataset_name: str, vocab_dir: str) -> Vocab:
         vocab_path = f'{vocab_dir}/vocab-summarization-{dataset_name}.pt'
         if os.path.exists(vocab_path):
