@@ -122,10 +122,8 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, batch_size: int, max_summary_length: int, embedding_dim: int = 128,
-                 hidden_size: int = 256):
+    def __init__(self, vocab_size: int, batch_size: int, embedding_dim: int = 128, hidden_size: int = 256):
         super().__init__()
-        self.max_summary_length = max_summary_length
         self.batch_size = batch_size
         self.hidden_size = hidden_size
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
@@ -141,7 +139,7 @@ class PointerGeneratorNetwork(nn.Module):
         attention_list = []
         coverage_list = []
 
-        for i in range(self.max_summary_length):
+        for i in range(summaries.shape[0]):
             decoder_input = summaries[i, :]
             decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden,
                                                                                      encoder_out, encoder_features,

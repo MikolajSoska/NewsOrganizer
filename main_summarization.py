@@ -11,10 +11,9 @@ load_checkpoint = False
 set_random_seed(0)
 epochs = 1
 batch_size = 16
-max_summary_length = 100
-dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=max_summary_length)
+dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100)
 loader = SummarizationDataLoader(dataset, batch_size=batch_size)
-model = PointerGeneratorNetwork(dataset.get_vocab_size(), batch_size, max_summary_length)
+model = PointerGeneratorNetwork(dataset.get_vocab_size(), batch_size)
 model.to(device)
 
 criterion = nn.NLLLoss()
