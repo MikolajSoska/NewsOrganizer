@@ -1,5 +1,8 @@
+from typing import Tuple, Any, Union
+
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class TimeDistributed(nn.Module):
@@ -14,6 +17,20 @@ class TimeDistributed(nn.Module):
         y = y.view(-1, x.size(1), y.size(-1))
 
         return y
+
+
+class PackedRNN(nn.Module):
+    def __init__(self, rnn_module: nn.RNNBase):
+        super().__init__()
+        self.rnn_module = rnn_module
+
+    def forward(self, sequence: torch.Tensor, sequence_lengths: torch.Tensor,
+                *rnn_args: Any) -> Tuple[torch.Tensor, Union[torch.Tensor, Tuple[torch.Tensor, ...]]]:
+        sequence_packed = pack_padded_sequence(sequence, sequence_lengths, enforce_sorted=False)
+        output, hidden = self.rnn_module(sequence_packed, *rnn_args)
+        output_padded, _ = pad_packed_sequence(output, total_length=int(sequence_lengths.max()))
+
+        return output_padded, hidden
 
 
 class View(nn.Module):

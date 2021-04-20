@@ -10,7 +10,7 @@ class Encoder(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True)
+        self.lstm = utils.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True))
         self.linear = nn.Sequential(
             utils.View(-1, 2 * hidden_size),
             nn.Linear(hidden_size * 2, hidden_size * 2)
@@ -28,19 +28,20 @@ class Encoder(nn.Module):
             utils.Unsqueeze(0)
         )
 
-    def forward(self, x_in: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        x = self.embedding(x_in)
-        x, (hidden, cell) = self.lstm(x)
-        x = x.contiguous()
-        x_out = self.linear(x)
-        x = x.permute(1, 0, 2)
+    def forward(self, texts_in: torch.Tensor, texts_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor,
+                                                                                    Tuple[torch.Tensor, torch.Tensor]]:
+        texts = self.embedding(texts_in)
+        texts, (hidden, cell) = self.lstm(texts, texts_lengths)
+        texts = texts.contiguous()
+        texts_out = self.linear(texts)
+        texts = texts.permute(1, 0, 2)
 
         hidden = hidden.transpose(0, 1).contiguous()
         hidden = self.reduce_hidden(hidden)
         cell = cell.transpose(0, 1).contiguous()
         cell = self.reduce_cell(cell)
 
-        return x, x_out, (hidden, cell)
+        return texts, texts_out, (hidden, cell)
 
 
 class Attention(nn.Module):
@@ -88,6 +89,7 @@ class Decoder(nn.Module):
         self.hidden_size = hidden_size
         self.attention = Attention(hidden_size, batch_size)
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
+        # No need for PackedRNN because sequence length is always one
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size)
         self.context = nn.Sequential(
             nn.Linear(hidden_size * 2 + embedding_dim, embedding_dim),
@@ -129,9 +131,9 @@ class PointerGeneratorNetwork(nn.Module):
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, batch_size, embedding_dim, hidden_size)
 
-    def forward(self, texts: torch.Tensor,
+    def forward(self, texts: torch.Tensor, texts_lengths: torch.Tensor,
                 summaries: torch.Tensor) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
-        encoder_out, encoder_features, hidden = self.encoder(texts)
+        encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         device = texts.device
         context = torch.zeros((self.batch_size, 2 * self.hidden_size), device=device)
         coverage = torch.zeros_like(texts, device=device, dtype=torch.float)

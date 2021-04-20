@@ -32,7 +32,7 @@ for epoch in range(epochs):
         texts = texts.to(device=device)
         summaries = summaries.to(device=device)
 
-        output = model(texts, summaries)
+        output = model(texts, texts_lengths, summaries)
         step_losses = []
         for prediction, attention, coverage, summary in zip(*output, summaries):
             step_loss = criterion(prediction, summary) + criterion_coverage(attention, coverage)
