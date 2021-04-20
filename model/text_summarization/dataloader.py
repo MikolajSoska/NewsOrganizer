@@ -31,12 +31,15 @@ class SpecialTokens(enum.Enum):
 
 
 class SummarizationDataset(Dataset):
-    def __init__(self, dataset_name: str, vocab_dir: str = 'data/vocabs', data_dir: str = 'data/datasets'):
+    def __init__(self, dataset_name: str, max_article_length: int, max_summary_length: int,
+                 vocab_dir: str = 'data/vocabs', data_dir: str = 'data/datasets'):
         self.__vocab = self.__build_vocab(dataset_name, vocab_dir)
         self.__dataset = self.__build_dataset(dataset_name, data_dir)
+        self.__max_article_length = max_article_length
+        self.__max_summary_length = max_summary_length
 
     def get_vocab_size(self) -> int:
-        return len(self.vocab)
+        return len(self.__vocab)
 
     def __build_vocab(self, dataset_name: str, vocab_dir: str) -> Vocab:
         vocab_path = f'{vocab_dir}/vocab-summarization-{dataset_name}.pt'
@@ -87,30 +90,33 @@ class SummarizationDataset(Dataset):
         return dataset['article'], dataset['highlights']
 
     def __getitem__(self, index: int) -> T_co:
-        return self.__dataset[index]
+        text, summary = self.__dataset[index]
+        text = text[:self.__max_article_length]
+        target = summary[1:]  # Without BOS token
+        if len(summary) > self.__max_summary_length:
+            summary = summary[:self.__max_summary_length]
+            target = target[:self.__max_summary_length]
+        else:
+            summary = summary[:-1]  # Remove EOS token
+
+        return text, summary, target
 
     def __len__(self) -> int:
         return len(self.__dataset)
 
 
 class SummarizationDataLoader(DataLoader):
-    def __init__(self, dataset: Dataset[T_co], batch_size: int, max_summary_length: int):
+    def __init__(self, dataset: Dataset[T_co], batch_size: int):
         super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
-        self.max_summary_length = max_summary_length
 
-    def __generate_batch(self, batch: List) -> Tuple[torch.Tensor, torch.Tensor]:
-        texts, summaries = zip(*batch)
+    @staticmethod
+    def __generate_batch(batch: List) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        texts, summaries, targets = zip(*batch)
+        texts_lengths = torch.tensor([len(text) for text in texts])
+        summaries_lengths = torch.tensor([len(summary) for summary in summaries])
+
         texts_padded = pad_sequence(texts)
-        summaries_padded = self.__pad_summaries(summaries)
-
-        return texts_padded, summaries_padded
-
-    def __pad_summaries(self, summaries: List[torch.Tensor]) -> torch.Tensor:
         summaries_padded = pad_sequence(summaries)
-        sequence_length, batch_size = summaries_padded.shape
-        sequence_length = min(sequence_length, self.max_summary_length)
-        zero_mask = torch.zeros((self.max_summary_length, self.batch_size), dtype=torch.long)
-        zero_mask[:sequence_length, :batch_size] = summaries_padded[:sequence_length, :batch_size]
+        targets_padded = pad_sequence(targets)
 
-        return zero_mask
-
+        return texts_padded, texts_lengths, summaries_padded, summaries_lengths, targets_padded

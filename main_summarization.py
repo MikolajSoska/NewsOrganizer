@@ -12,8 +12,8 @@ set_random_seed(0)
 epochs = 1
 batch_size = 16
 max_summary_length = 100
-dataset = SummarizationDataset('cnn_dailymail')
-loader = SummarizationDataLoader(dataset, batch_size=batch_size, max_summary_length=max_summary_length)
+dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=max_summary_length)
+loader = SummarizationDataLoader(dataset, batch_size=batch_size)
 model = PointerGeneratorNetwork(dataset.get_vocab_size(), batch_size, max_summary_length)
 model.to(device)
 
@@ -27,8 +27,8 @@ if load_checkpoint:
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 for epoch in range(epochs):
-    for i, (texts, summaries) in enumerate(loader):
-        optimizer.zero_grad()
+    for i, (texts, texts_lengths, summaries, summaries_lengths, targets) in enumerate(loader):
+        optimizer.zero_grad(set_to_none=True)
         texts = texts.to(device=device)
         summaries = summaries.to(device=device)
 
