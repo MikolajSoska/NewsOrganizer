@@ -1,5 +1,6 @@
+import time
+
 import torch
-import torch.nn as nn
 
 import model.utils as utils
 from model.text_summarization.dataloader import SummarizationDataset, SummarizationDataLoader
@@ -16,36 +17,40 @@ loader = SummarizationDataLoader(dataset, batch_size=batch_size)
 model = PointerGeneratorNetwork(dataset.get_vocab_size(), batch_size)
 model.to(device)
 
-criterion = nn.NLLLoss()
+criterion = utils.SummarizationLoss()
 criterion_coverage = utils.CoverageLoss()
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adagrad(model.parameters(), lr=0.15, initial_accumulator_value=0.1)
 
 if load_checkpoint:
     checkpoint = torch.load('data/weights/summarization-model-cpu.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
+time_start = time.time()
 for epoch in range(epochs):
     for i, (texts, texts_lengths, summaries, summaries_lengths, targets) in enumerate(loader):
         optimizer.zero_grad(set_to_none=True)
+        torch.cuda.empty_cache()
         texts = texts.to(device=device)
+        texts_lengths = texts_lengths.to(device=device)
         summaries = summaries.to(device=device)
+        summaries_lengths = summaries_lengths.to(device=device)
+        targets = targets.to(device=device)
 
-        output = model(texts, texts_lengths, summaries)
-        step_losses = []
-        for prediction, attention, coverage, summary in zip(*output, summaries):
-            step_loss = criterion(prediction, summary) + criterion_coverage(attention, coverage)
-            step_losses.append(step_loss)
-
-        loss = torch.sum(torch.stack(step_losses))
+        output, attention, coverage = model(texts, texts_lengths, summaries)
+        loss = criterion(output, targets, summaries_lengths) + criterion_coverage(attention, coverage, targets)
         loss.backward()
         optimizer.step()
 
         if i % 10 == 1:
-            print(f'Epoch: {epoch} Iter: {i}/{len(loader)} Loss: {loss}')
+            time_iter = round(time.time() - time_start, 2)
+            memory = round(torch.cuda.memory_reserved(0) / (1024 ** 3), 2)  # To GB
+            print(f'Epoch: {epoch} Iter: {i}/{len(loader)} Loss: {loss}, Time: {time_iter} seconds, '
+                  f'Memory: {memory} GB')
             torch.save({
                 'epoch': epoch,
                 'model_state_dict':
                     model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
             }, 'data/weights/summarization-model.pt')
+            time_start = time.time()

@@ -148,4 +148,8 @@ class PointerGeneratorNetwork(nn.Module):
             attention_list.append(attention)
             coverage_list.append(coverage)
 
-        return outputs, attention_list, coverage_list
+        outputs = torch.stack(outputs)
+        attentions = torch.stack(attention_list)
+        coverages = torch.stack(coverage_list)
+
+        return outputs, attentions, coverages

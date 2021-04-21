@@ -94,8 +94,9 @@ class SummarizationLoss(LossWithReduction):
         self.epsilon = epsilon
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor, target_lengths: torch.Tensor) -> torch.Tensor:
+        padding_mask = torch.clip(targets, min=0, max=1)
         gathered_probabilities = torch.gather(predictions, 2, targets.unsqueeze(2)).squeeze()
-        loss = -torch.log(gathered_probabilities + self.epsilon)
+        loss = -torch.log(gathered_probabilities + self.epsilon) * padding_mask
         loss = torch.sum(loss, dim=0) / target_lengths
 
         return self.reduction(loss)
@@ -106,8 +107,9 @@ class CoverageLoss(LossWithReduction):
         super().__init__(reduction)
         self.weight = weight
 
-    def forward(self, attention: torch.Tensor, coverage: torch.Tensor) -> torch.Tensor:
-        loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1)
+    def forward(self, attention: torch.Tensor, coverage: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        padding_mask = torch.clip(targets, min=0, max=1)
+        loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1) * padding_mask
         if self.reduction is not None:
             return self.reduction(loss)
         else:
