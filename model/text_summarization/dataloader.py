@@ -64,8 +64,9 @@ class SummarizationDataset(Dataset):
         for text_tokens, summary_tokens in self.__dataset_tokens_generator(dataset_name):
             text_tokens = [SpecialTokens.BOS.value] + text_tokens + [SpecialTokens.EOS.value]
             summary_tokens = [SpecialTokens.BOS.value] + summary_tokens + [SpecialTokens.EOS.value]
-            text_tensor = torch.tensor([self.__vocab.stoi[token] for token in text_tokens], dtype=torch.long)
-            summary_tensor = torch.tensor([self.__vocab.stoi[token] for token in summary_tokens], dtype=torch.long)
+            text_tensor = torch.tensor([self.__vocab.stoi[token.lower()] for token in text_tokens], dtype=torch.long)
+            summary_tensor = torch.tensor([self.__vocab.stoi[token.lower()] for token in summary_tokens],
+                                          dtype=torch.long)
             dataset.append((text_tensor, summary_tensor))
 
         torch.save(dataset, dataset_path)

@@ -1,3 +1,4 @@
+import abc
 from typing import Tuple, Any, Union
 
 import torch
@@ -26,7 +27,8 @@ class PackedRNN(nn.Module):
 
     def forward(self, sequence: torch.Tensor, sequence_lengths: torch.Tensor,
                 *rnn_args: Any) -> Tuple[torch.Tensor, Union[torch.Tensor, Tuple[torch.Tensor, ...]]]:
-        sequence_packed = pack_padded_sequence(sequence, sequence_lengths, enforce_sorted=False)
+        lengths = sequence_lengths.squeeze().tolist()
+        sequence_packed = pack_padded_sequence(sequence, lengths, enforce_sorted=False)
         output, hidden = self.rnn_module(sequence_packed, *rnn_args)
         output_padded, _ = pad_packed_sequence(output, total_length=int(sequence_lengths.max()))
 
@@ -69,10 +71,9 @@ class Unsqueeze(nn.Module):
         return x_in.unsqueeze(dim=self.dimension)
 
 
-class CoverageLoss(nn.Module):
-    def __init__(self, weight: float = 1.0, reduction: str = 'mean'):
+class LossWithReduction(nn.Module, abc.ABC):
+    def __init__(self, reduction: str):
         super().__init__()
-        self.weight = weight
         if reduction == 'mean':
             self.reduction = torch.mean
         elif reduction == 'sum':
@@ -81,6 +82,29 @@ class CoverageLoss(nn.Module):
             self.reduction = None
         else:
             raise ValueError(f'{reduction} is not a valid value for reduction')
+
+    @abc.abstractmethod
+    def forward(self, *args: Any) -> torch.Tensor:
+        pass
+
+
+class SummarizationLoss(LossWithReduction):
+    def __init__(self, epsilon: float = 1e-12, reduction: str = 'mean'):
+        super().__init__(reduction)
+        self.epsilon = epsilon
+
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor, target_lengths: torch.Tensor) -> torch.Tensor:
+        gathered_probabilities = torch.gather(predictions, 2, targets.unsqueeze(2)).squeeze()
+        loss = -torch.log(gathered_probabilities + self.epsilon)
+        loss = torch.sum(loss, dim=0) / target_lengths
+
+        return self.reduction(loss)
+
+
+class CoverageLoss(LossWithReduction):
+    def __init__(self, weight: float = 1.0, reduction: str = 'mean'):
+        super().__init__(reduction)
+        self.weight = weight
 
     def forward(self, attention: torch.Tensor, coverage: torch.Tensor) -> torch.Tensor:
         loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1)
