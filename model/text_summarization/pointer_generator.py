@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -45,7 +45,7 @@ class Encoder(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, hidden_size: int, batch_size: int):
+    def __init__(self, hidden_size: int):
         super().__init__()
         self.hidden_size = hidden_size
         self.features = nn.Sequential(
@@ -56,17 +56,20 @@ class Attention(nn.Module):
             utils.View(-1, 1),
             nn.Linear(1, hidden_size * 2)
         )
-        self.attention = nn.Sequential(
+        self.attention_first = nn.Sequential(
             nn.Tanh(),
             nn.Linear(hidden_size * 2, 1),
-            utils.View(-1, batch_size),
-            nn.Softmax(dim=0),
+        )
+        self.softmax = nn.Softmax(dim=0)
+        self.attention_second = nn.Sequential(
+            # If encoder_mask sets some weights to zero, than they don't sum to one, so re-normalization is needed
+            utils.Normalize(0),
             utils.Permute(1, 0),
             utils.Unsqueeze(1)
         )
 
     def forward(self, hidden: torch.Tensor, encoder_out: torch.Tensor, encoder_features: torch.Tensor,
-                coverage: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                encoder_mask: torch.Tensor, coverage: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         batch, sequence_len, hidden_size = encoder_out.shape
 
         decoder_features = self.features(hidden)
@@ -74,20 +77,21 @@ class Attention(nn.Module):
         coverage_features = self.coverage(coverage)
 
         attention = encoder_features + decoder_features + coverage_features
-        attention = self.attention(attention)
+        attention = self.attention_first(attention).view(sequence_len, batch)
+        attention = self.softmax(attention) * encoder_mask
+        attention = self.attention_second(attention)
 
         context = torch.bmm(attention, encoder_out).view(-1, 2 * self.hidden_size)
         attention = attention.view(-1, sequence_len).permute(1, 0)
         coverage = coverage + attention
-
         return context, attention, coverage
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size: int, batch_size: int, embedding_dim: int, hidden_size: int):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.hidden_size = hidden_size
-        self.attention = Attention(hidden_size, batch_size)
+        self.attention = Attention(hidden_size)
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
         # No need for PackedRNN because sequence length is always one
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size)
@@ -101,10 +105,11 @@ class Decoder(nn.Module):
             nn.Softmax(dim=1)
         )
 
-    def forward(self, x_in: torch.Tensor, hidden_in: Tuple[torch.Tensor, torch.Tensor], encoder_out: torch.Tensor,
-                encoder_features: torch.Tensor, context: torch.Tensor,
+    def forward(self, summaries_in: torch.Tensor, hidden_in: Tuple[torch.Tensor, torch.Tensor],
+                encoder_out: torch.Tensor, encoder_features: torch.Tensor,
+                encoder_mask: torch.Tensor, context: torch.Tensor,
                 coverage: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        x = self.embedding(x_in)
+        x = self.embedding(summaries_in)
         x = torch.cat((context, x), dim=1)
         x = self.context(x)
         x, (hidden, cell) = self.lstm(x, hidden_in)
@@ -112,7 +117,8 @@ class Decoder(nn.Module):
         hidden = hidden.view(-1, self.hidden_size)
         cell = cell.view(-1, self.hidden_size)
         hidden_out = torch.cat((hidden, cell), dim=1)
-        context, attention, coverage_next = self.attention(hidden_out, encoder_out, encoder_features, coverage)
+        context, attention, coverage_next = self.attention(hidden_out, encoder_out, encoder_features, encoder_mask,
+                                                           coverage)
 
         x = x.view(-1, self.hidden_size)
         x = torch.cat((x, context), dim=1)
@@ -122,18 +128,20 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, batch_size: int, embedding_dim: int = 128, hidden_size: int = 256):
+    def __init__(self, vocab_size: int, embedding_dim: int = 128, hidden_size: int = 256):
         super().__init__()
-        self.batch_size = batch_size
         self.hidden_size = hidden_size
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
-        self.decoder = Decoder(vocab_size, batch_size, embedding_dim, hidden_size)
+        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
 
     def forward(self, texts: torch.Tensor, texts_lengths: torch.Tensor,
-                summaries: torch.Tensor) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+                summaries: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
+        encoder_mask = torch.clip(texts, min=0, max=1)
         device = texts.device
-        context = torch.zeros((self.batch_size, 2 * self.hidden_size), device=device)
+        batch_size = texts.shape[1]
+
+        context = torch.zeros((batch_size, 2 * self.hidden_size), device=device)
         coverage = torch.zeros_like(texts, device=device, dtype=torch.float)
         outputs = []
         attention_list = []
@@ -143,7 +151,7 @@ class PointerGeneratorNetwork(nn.Module):
             decoder_input = summaries[i, :]
             decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden,
                                                                                      encoder_out, encoder_features,
-                                                                                     context, coverage)
+                                                                                     encoder_mask, context, coverage)
             outputs.append(decoder_out)
             attention_list.append(attention)
             coverage_list.append(coverage)

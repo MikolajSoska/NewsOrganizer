@@ -71,6 +71,16 @@ class Unsqueeze(nn.Module):
         return x_in.unsqueeze(dim=self.dimension)
 
 
+class Normalize(nn.Module):
+    def __init__(self, dimension: int):
+        super().__init__()
+        self.dimension = dimension
+
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+        factor = torch.sum(x_in, dim=self.dimension, keepdim=True)
+        return x_in / factor
+
+
 class LossWithReduction(nn.Module, abc.ABC):
     def __init__(self, reduction: str):
         super().__init__()

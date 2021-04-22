@@ -14,7 +14,7 @@ epochs = 1
 batch_size = 16
 dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100)
 loader = SummarizationDataLoader(dataset, batch_size=batch_size)
-model = PointerGeneratorNetwork(dataset.get_vocab_size(), batch_size)
+model = PointerGeneratorNetwork(dataset.get_vocab_size())
 model.to(device)
 
 criterion = utils.SummarizationLoss()
