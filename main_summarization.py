@@ -11,8 +11,9 @@ from utils import set_random_seed
 device = 'cuda'
 load_checkpoint = True
 set_random_seed(0)
-epochs = 5
+epochs = 13
 batch_size = 4
+coverage_iterations = 48000
 
 dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100)
 loader = SummarizationDataLoader(dataset, batch_size=batch_size)
@@ -40,12 +41,19 @@ else:
 gc.collect()
 time_start = time.time()
 running_loss = []
+iterations_without_coverage = len(loader) * batch_size * epochs
+iterations_count = (epoch_start + 1) * iteration
+
 for epoch in range(epoch_start, epochs):
     for i, (texts, texts_lengths, summaries, summaries_lengths, targets) in enumerate(loader):
         if i < iteration:
             continue
         else:
             iteration = 0
+
+        if iterations_count >= iterations_without_coverage and not model.with_coverage:
+            print(f'Iteration {iterations_count}. Activated coverage mechanism.')
+            model.activate_coverage()
 
         optimizer.zero_grad(set_to_none=True)
         torch.cuda.empty_cache()
@@ -56,7 +64,10 @@ for epoch in range(epoch_start, epochs):
         targets = targets.to(device=device)
 
         output, attention, coverage = model(texts, texts_lengths, summaries)
-        loss = criterion(output, targets, summaries_lengths) + criterion_coverage(attention, coverage, targets)
+        loss = criterion(output, targets, summaries_lengths)
+        if coverage is not None:
+            loss = loss + criterion_coverage(attention, coverage, targets)
+
         loss.backward()
         optimizer.step()
         running_loss.append(loss.item())

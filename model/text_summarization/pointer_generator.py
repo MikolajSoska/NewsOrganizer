@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -69,21 +69,27 @@ class Attention(nn.Module):
         )
 
     def forward(self, hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_mask: Tensor,
-                coverage: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+                coverage: Optional[Tensor]) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
         batch, sequence_len, hidden_size = encoder_out.shape
 
         decoder_features = self.features(hidden)
         decoder_features = decoder_features.expand(sequence_len, batch, hidden_size).contiguous().view(-1, hidden_size)
-        coverage_features = self.coverage(coverage)
+        attention = encoder_features + decoder_features
 
-        attention = encoder_features + decoder_features + coverage_features
+        if coverage is not None:  # If training with coverage
+            coverage_features = self.coverage(coverage)
+            attention = attention + coverage_features
+
         attention = self.attention_first(attention).view(sequence_len, batch)
         attention = self.softmax(attention) * encoder_mask
         attention = self.attention_second(attention)
 
         context = torch.bmm(attention, encoder_out).view(-1, 2 * self.hidden_size)
         attention = attention.view(-1, sequence_len).permute(1, 0)
-        coverage = coverage + attention
+
+        if coverage is not None:
+            coverage = coverage + attention
+
         return context, attention, coverage
 
 
@@ -107,7 +113,7 @@ class Decoder(nn.Module):
 
     def forward(self, summaries_in: Tensor, hidden_in: Tuple[Tensor, Tensor], encoder_out: Tensor,
                 encoder_features: Tensor, encoder_mask: Tensor, context: Tensor,
-                coverage: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+                coverage: Optional[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Tensor, Optional[Tensor]]:
         x = self.embedding(summaries_in)
         x = torch.cat((context, x), dim=1)
         x = self.context(x)
@@ -130,17 +136,26 @@ class PointerGeneratorNetwork(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int = 128, hidden_size: int = 256):
         super().__init__()
         self.hidden_size = hidden_size
+        self.with_coverage = False  # Coverage is active only during last phase of training
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
 
-    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def activate_coverage(self):
+        self.with_coverage = True
+
+    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor) -> Tuple[Tensor, Tensor,
+                                                                                        Optional[Tensor]]:
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         encoder_mask = torch.clip(texts, min=0, max=1)
         device = texts.device
         batch_size = texts.shape[1]
 
         context = torch.zeros((batch_size, 2 * self.hidden_size), device=device)
-        coverage = torch.zeros_like(texts, device=device, dtype=torch.float)
+        if self.with_coverage:
+            coverage = torch.zeros_like(texts, device=device, dtype=torch.float)
+        else:
+            coverage = None
+
         outputs = []
         attention_list = []
         coverage_list = []
@@ -156,6 +171,9 @@ class PointerGeneratorNetwork(nn.Module):
 
         outputs = torch.stack(outputs)
         attentions = torch.stack(attention_list)
-        coverages = torch.stack(coverage_list)
+        if self.with_coverage:
+            coverages = torch.stack(coverage_list)
+        else:
+            coverages = None
 
         return outputs, attentions, coverages
