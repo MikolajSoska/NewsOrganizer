@@ -6,6 +6,7 @@ from typing import List, Tuple, Iterator
 import datasets
 import torch
 import tqdm
+from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, T_co
@@ -55,7 +56,7 @@ class SummarizationDataset(Dataset):
         torch.save(vocab, vocab_path)
         return vocab
 
-    def __build_dataset(self, dataset_name: str, data_dir: str) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    def __build_dataset(self, dataset_name: str, data_dir: str) -> List[Tuple[Tensor, Tensor]]:
         dataset_path = f'{data_dir}/dataset-summarization-{dataset_name}.pt'
         if os.path.exists(dataset_path):
             return torch.load(dataset_path)
@@ -111,7 +112,7 @@ class SummarizationDataLoader(DataLoader):
         super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
 
     @staticmethod
-    def __generate_batch(batch: List) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __generate_batch(batch: List) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         texts, summaries, targets = zip(*batch)
         texts_lengths = torch.tensor([len(text) for text in texts])
         summaries_lengths = torch.tensor([len(summary) for summary in summaries])

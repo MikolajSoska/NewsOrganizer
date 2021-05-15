@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+from torch import Tensor
+
 import model.utils as utils
 
 
 class BiLSTMConv(nn.Module):
-    def __init__(self, embeddings: torch.Tensor, output_size: int, batch_size: int, char_count: int,
+    def __init__(self, embeddings: Tensor, output_size: int, batch_size: int, char_count: int,
                  max_word_length: int, char_embedding_size: int):
         super().__init__()
         self.char_features_size = 50
@@ -46,7 +48,7 @@ class BiLSTMConv(nn.Module):
         return int((input_length + 2 * conv.padding[0] - conv.dilation[0] *
                     (conv.kernel_size[0] - 1) - 1) / conv.stride[0] + 1)
 
-    def forward(self, sentences_in: torch.Tensor, chars_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, sentences_in: Tensor, chars_in: Tensor) -> Tensor:
         x_chars = self.char_network(chars_in)
 
         self.hidden = self.__init_hidden()

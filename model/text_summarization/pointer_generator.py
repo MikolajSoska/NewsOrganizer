@@ -2,6 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 import model.utils as utils
 
@@ -28,8 +29,7 @@ class Encoder(nn.Module):
             utils.Unsqueeze(0)
         )
 
-    def forward(self, texts_in: torch.Tensor, texts_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor,
-                                                                                    Tuple[torch.Tensor, torch.Tensor]]:
+    def forward(self, texts_in: Tensor, texts_lengths: Tensor) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor]]:
         texts = self.embedding(texts_in)
         texts, (hidden, cell) = self.lstm(texts, texts_lengths)
         texts = texts.contiguous()
@@ -68,8 +68,8 @@ class Attention(nn.Module):
             utils.Unsqueeze(1)
         )
 
-    def forward(self, hidden: torch.Tensor, encoder_out: torch.Tensor, encoder_features: torch.Tensor,
-                encoder_mask: torch.Tensor, coverage: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_mask: Tensor,
+                coverage: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         batch, sequence_len, hidden_size = encoder_out.shape
 
         decoder_features = self.features(hidden)
@@ -105,10 +105,9 @@ class Decoder(nn.Module):
             nn.Softmax(dim=1)
         )
 
-    def forward(self, summaries_in: torch.Tensor, hidden_in: Tuple[torch.Tensor, torch.Tensor],
-                encoder_out: torch.Tensor, encoder_features: torch.Tensor,
-                encoder_mask: torch.Tensor, context: torch.Tensor,
-                coverage: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, summaries_in: Tensor, hidden_in: Tuple[Tensor, Tensor], encoder_out: Tensor,
+                encoder_features: Tensor, encoder_mask: Tensor, context: Tensor,
+                coverage: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         x = self.embedding(summaries_in)
         x = torch.cat((context, x), dim=1)
         x = self.context(x)
@@ -134,8 +133,7 @@ class PointerGeneratorNetwork(nn.Module):
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
 
-    def forward(self, texts: torch.Tensor, texts_lengths: torch.Tensor,
-                summaries: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         encoder_mask = torch.clip(texts, min=0, max=1)
         device = texts.device

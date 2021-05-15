@@ -3,6 +3,7 @@ from typing import Tuple, Any, Union
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
@@ -25,8 +26,8 @@ class PackedRNN(nn.Module):
         super().__init__()
         self.rnn_module = rnn_module
 
-    def forward(self, sequence: torch.Tensor, sequence_lengths: torch.Tensor,
-                *rnn_args: Any) -> Tuple[torch.Tensor, Union[torch.Tensor, Tuple[torch.Tensor, ...]]]:
+    def forward(self, sequence: Tensor, sequence_lengths: Tensor,
+                *rnn_args: Any) -> Tuple[Tensor, Union[Tensor, Tuple[Tensor, ...]]]:
         lengths = sequence_lengths.squeeze().tolist()
         sequence_packed = pack_padded_sequence(sequence, lengths, enforce_sorted=False)
         output, hidden = self.rnn_module(sequence_packed, *rnn_args)
@@ -40,7 +41,7 @@ class View(nn.Module):
         super().__init__()
         self.shape = shape
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: Tensor) -> Tensor:
         return x_in.view(self.shape)
 
 
@@ -49,7 +50,7 @@ class Permute(nn.Module):
         super().__init__()
         self.dimensions = dimensions
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: Tensor) -> Tensor:
         return x_in.permute(self.dimensions)
 
 
@@ -58,7 +59,7 @@ class Squeeze(nn.Module):
         super().__init__()
         self.dimension = dimension
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: Tensor) -> Tensor:
         return x_in.squeeze(dim=self.dimension)
 
 
@@ -67,7 +68,7 @@ class Unsqueeze(nn.Module):
         super().__init__()
         self.dimension = dimension
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: Tensor) -> Tensor:
         return x_in.unsqueeze(dim=self.dimension)
 
 
@@ -76,7 +77,7 @@ class Normalize(nn.Module):
         super().__init__()
         self.dimension = dimension
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: Tensor) -> Tensor:
         factor = torch.sum(x_in, dim=self.dimension, keepdim=True)
         return x_in / factor
 
@@ -94,7 +95,7 @@ class LossWithReduction(nn.Module, abc.ABC):
             raise ValueError(f'{reduction} is not a valid value for reduction')
 
     @abc.abstractmethod
-    def forward(self, *args: Any) -> torch.Tensor:
+    def forward(self, *args: Any) -> Tensor:
         pass
 
 
@@ -103,7 +104,7 @@ class SummarizationLoss(LossWithReduction):
         super().__init__(reduction)
         self.epsilon = epsilon
 
-    def forward(self, predictions: torch.Tensor, targets: torch.Tensor, target_lengths: torch.Tensor) -> torch.Tensor:
+    def forward(self, predictions: Tensor, targets: Tensor, target_lengths: Tensor) -> Tensor:
         padding_mask = torch.clip(targets, min=0, max=1)
         gathered_probabilities = torch.gather(predictions, 2, targets.unsqueeze(2)).squeeze()
         loss = -torch.log(gathered_probabilities + self.epsilon) * padding_mask
@@ -117,7 +118,7 @@ class CoverageLoss(LossWithReduction):
         super().__init__(reduction)
         self.weight = weight
 
-    def forward(self, attention: torch.Tensor, coverage: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def forward(self, attention: Tensor, coverage: Tensor, targets: Tensor) -> Tensor:
         padding_mask = torch.clip(targets, min=0, max=1)
         loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1) * padding_mask
         if self.reduction is not None:
