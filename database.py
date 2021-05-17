@@ -22,9 +22,9 @@ class DatabaseConnector(metaclass=Singleton):
 
         return [Country(name, code) for _, name, code in self.__cursor.fetchall()]
 
-    def get_news_sites(self, country_code: str) -> List[NewsSite]:
-        query = 'SELECT news_sites.name, news_sites.code, countries.name FROM news_sites INNER JOIN countries ON ' \
+    def get_news_sites(self, country: Country) -> List[NewsSite]:
+        query = 'SELECT news_sites.name, news_sites.code FROM news_sites INNER JOIN countries ON ' \
                 'news_sites.country_id = countries.id WHERE countries.code = %s'
-        self.__cursor.execute(query, (country_code,))
+        self.__cursor.execute(query, (country.code,))
 
-        return [NewsSite(name, code, country) for name, code, country in self.__cursor.fetchall()]
+        return [NewsSite(name, code, country) for name, code in self.__cursor.fetchall()]
