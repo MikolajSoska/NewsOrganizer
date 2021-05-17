@@ -6,7 +6,7 @@ import torch
 import model.utils as utils
 from model.text_summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from model.text_summarization.pointer_generator import PointerGeneratorNetwork
-from utils import set_random_seed
+from utils.general import set_random_seed
 
 device = 'cuda'
 load_checkpoint = False
