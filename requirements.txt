@@ -7,3 +7,4 @@ datasets==1.5.0
 tqdm==4.49.0
 requests==2.25.1
 beautifulsoup4==4.9.1
+mysql-connector-python==8.0.23
