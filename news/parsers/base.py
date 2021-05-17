@@ -11,7 +11,7 @@ class BaseNewsParser(abc.ABC):
         pass
 
     @staticmethod
-    def __get_article_site(url: str) -> Optional[bs4.BeautifulSoup]:
+    def _get_article_site(url: str) -> Optional[bs4.BeautifulSoup]:
         response = requests.get(url)
         if response.status_code == requests.codes.ok:
             return bs4.BeautifulSoup(response.content, 'html.parser')

@@ -6,7 +6,7 @@ from news.parsers.base import BaseNewsParser
 
 class CNBCParser(BaseNewsParser):
     def parse_article_content(self, url: str) -> Optional[List[str]]:
-        article_site = self.__get_article_site(url)
+        article_site = self._get_article_site(url)
         if article_site is None:
             return None
 
