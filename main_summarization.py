@@ -14,10 +14,12 @@ set_random_seed(0)
 epochs = 13
 batch_size = 4
 coverage_iterations = 48000
+vocab_size = 50000
 
-dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100)
+dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100,
+                               vocab_size=vocab_size, get_oov=True)
 loader = SummarizationDataLoader(dataset, batch_size=batch_size)
-model = PointerGeneratorNetwork(dataset.get_vocab_size())
+model = PointerGeneratorNetwork(vocab_size)
 model.to(device)
 
 criterion = utils.SummarizationLoss()
@@ -45,7 +47,7 @@ iterations_without_coverage = len(loader) * batch_size * epochs
 iterations_count = (epoch_start + 1) * iteration
 
 for epoch in range(epoch_start, epochs):
-    for i, (texts, texts_lengths, summaries, summaries_lengths, targets) in enumerate(loader):
+    for i, (texts, texts_lengths, summaries, summaries_lengths, targets, oov_list) in enumerate(loader):
         if i < iteration:
             continue
         else:
