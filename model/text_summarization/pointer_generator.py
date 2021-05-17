@@ -105,6 +105,10 @@ class Decoder(nn.Module):
             nn.Linear(hidden_size * 2 + embedding_dim, embedding_dim),
             utils.Unsqueeze(0)
         )
+        self.pointer_generator = nn.Sequential(
+            nn.Linear(hidden_size * 4 + embedding_dim, 1),
+            nn.Sigmoid()
+        )
         self.out = nn.Sequential(
             nn.Linear(hidden_size * 3, hidden_size),
             nn.Linear(hidden_size, vocab_size),
@@ -113,11 +117,12 @@ class Decoder(nn.Module):
 
     def forward(self, summaries_in: Tensor, hidden_in: Tuple[Tensor, Tensor], encoder_out: Tensor,
                 encoder_features: Tensor, encoder_mask: Tensor, context: Tensor,
-                coverage: Optional[Tensor]) -> Tuple[Tensor, Tensor, Tensor, Tensor, Optional[Tensor]]:
+                coverage: Optional[Tensor], texts_extended: Tensor, oov_size: int) -> Tuple[Tensor, Tensor, Tensor,
+                                                                                            Tensor, Optional[Tensor]]:
         x = self.embedding(summaries_in)
         x = torch.cat((context, x), dim=1)
-        x = self.context(x)
-        x, (hidden, cell) = self.lstm(x, hidden_in)
+        context_out = self.context(x)
+        x, (hidden, cell) = self.lstm(context_out, hidden_in)
 
         hidden = hidden.view(-1, self.hidden_size)
         cell = cell.view(-1, self.hidden_size)
@@ -125,11 +130,23 @@ class Decoder(nn.Module):
         context, attention, coverage_next = self.attention(hidden_out, encoder_out, encoder_features, encoder_mask,
                                                            coverage)
 
+        generator_in = torch.cat((context, hidden_out, context_out.squeeze(0)), dim=1)
+        p_gen = self.pointer_generator(generator_in)
+
         x = x.view(-1, self.hidden_size)
         x = torch.cat((x, context), dim=1)
         x = self.out(x)
 
-        return x, hidden_out, context, attention, coverage_next
+        vocab_dist = p_gen * x
+        attention = (1 - p_gen).permute(1, 0) * attention
+        if oov_size > 0:
+            batch_size = vocab_dist.shape[0]
+            device = vocab_dist.device
+            vocab_dist = torch.cat((vocab_dist, torch.zeros((batch_size, oov_size), device=device)), dim=1)
+
+        vocab_dist = vocab_dist.scatter_add_(1, texts_extended.permute(1, 0), attention.permute(1, 0))
+
+        return vocab_dist, hidden_out, context, attention, coverage_next
 
 
 class PointerGeneratorNetwork(nn.Module):
@@ -143,8 +160,8 @@ class PointerGeneratorNetwork(nn.Module):
     def activate_coverage(self):
         self.with_coverage = True
 
-    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor) -> Tuple[Tensor, Tensor,
-                                                                                        Optional[Tensor]]:
+    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor, texts_extended: Tensor,
+                oov_size: int) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         encoder_mask = torch.clip(texts, min=0, max=1)
         device = texts.device
@@ -162,9 +179,10 @@ class PointerGeneratorNetwork(nn.Module):
 
         for i in range(summaries.shape[0]):
             decoder_input = summaries[i, :]
-            decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden,
-                                                                                     encoder_out, encoder_features,
-                                                                                     encoder_mask, context, coverage)
+            decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden, encoder_out,
+                                                                                     encoder_features, encoder_mask,
+                                                                                     context, coverage, texts_extended,
+                                                                                     oov_size)
             outputs.append(decoder_out)
             attention_list.append(attention)
             coverage_list.append(coverage)

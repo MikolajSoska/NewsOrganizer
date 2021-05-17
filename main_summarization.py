@@ -9,7 +9,7 @@ from model.text_summarization.pointer_generator import PointerGeneratorNetwork
 from utils import set_random_seed
 
 device = 'cuda'
-load_checkpoint = True
+load_checkpoint = False
 set_random_seed(0)
 epochs = 13
 batch_size = 4
@@ -19,7 +19,7 @@ vocab_size = 50000
 dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100,
                                vocab_size=vocab_size, get_oov=True)
 loader = SummarizationDataLoader(dataset, batch_size=batch_size)
-model = PointerGeneratorNetwork(vocab_size)
+model = PointerGeneratorNetwork(len(dataset.vocab))
 model.to(device)
 
 criterion = utils.SummarizationLoss()
@@ -47,7 +47,7 @@ iterations_without_coverage = len(loader) * batch_size * epochs
 iterations_count = (epoch_start + 1) * iteration
 
 for epoch in range(epoch_start, epochs):
-    for i, (texts, texts_lengths, summaries, summaries_lengths, targets, oov_list) in enumerate(loader):
+    for i, (texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list) in enumerate(loader):
         if i < iteration:
             continue
         else:
@@ -63,9 +63,11 @@ for epoch in range(epoch_start, epochs):
         texts_lengths = texts_lengths.to(device=device)
         summaries = summaries.to(device=device)
         summaries_lengths = summaries_lengths.to(device=device)
+        texts_extended = texts_extended.to(device=device)
         targets = targets.to(device=device)
 
-        output, attention, coverage = model(texts, texts_lengths, summaries)
+        oov_size = len(max(oov_list, key=lambda x: len(x)))
+        output, attention, coverage = model(texts, texts_lengths, summaries, texts_extended, oov_size)
         loss = criterion(output, targets, summaries_lengths)
         if coverage is not None:
             loss = loss + criterion_coverage(attention, coverage, targets)
@@ -73,6 +75,7 @@ for epoch in range(epoch_start, epochs):
         loss.backward()
         optimizer.step()
         running_loss.append(loss.item())
+        iterations_count += 1
 
         if i % 50 == 1:
             time_iter = round(time.time() - time_start, 2)

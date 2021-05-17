@@ -117,7 +117,11 @@ class SummarizationDataset(Dataset):
             summary = summary[:-1]  # Remove EOS token
 
         if self.get_oov:
-            return text, summary, target, oov_list
+            text_without_oov = torch.clone(text)
+            text_without_oov[text >= len(self.vocab)] = self.vocab.unk_index
+            summary_without_oov = torch.clone(summary)
+            summary_without_oov[summary >= len(self.vocab)] = self.vocab.unk_index
+            return text_without_oov, summary_without_oov, text, summary, target, oov_list
         else:  # Replace OOV tokens with UNK
             text[text >= len(self.vocab)] = self.vocab.unk_index
             summary[summary >= len(self.vocab)] = self.vocab.unk_index
@@ -134,10 +138,13 @@ class SummarizationDataLoader(DataLoader):
         self.get_oov = dataset.get_oov
 
     def __generate_batch(self, batch: List) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor],
-                                                     Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tuple[List[str]]]]:
+                                                     Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor,
+                                                           Tuple[List[str]]]]:
         oov_list = None
+        texts_extended_padded = None
         if self.get_oov:
-            texts, summaries, targets, oov_list = zip(*batch)
+            texts, summaries, texts_extended, summaries_extended, targets, oov_list = zip(*batch)
+            texts_extended_padded = pad_sequence(texts_extended)
         else:
             texts, summaries, targets = zip(*batch)
         texts_lengths = torch.tensor([len(text) for text in texts])
@@ -148,6 +155,7 @@ class SummarizationDataLoader(DataLoader):
         targets_padded = pad_sequence(targets)
 
         if self.get_oov:
-            return texts_padded, texts_lengths, summaries_padded, summaries_lengths, targets_padded, oov_list
+            return texts_padded, texts_lengths, summaries_padded, summaries_lengths, texts_extended_padded, \
+                   targets_padded, oov_list
         else:
             return texts_padded, texts_lengths, summaries_padded, summaries_lengths, targets_padded
