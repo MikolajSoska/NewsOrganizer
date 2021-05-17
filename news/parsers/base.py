@@ -6,6 +6,9 @@ import requests
 
 
 class BaseNewsParser(abc.ABC):
+    def __init__(self, headers=None):
+        self.__headers = headers
+
     def get_article_content(self, url: str) -> Optional[List[str]]:
         article_site = self._get_article_site(url)
         if article_site is None:
@@ -17,9 +20,9 @@ class BaseNewsParser(abc.ABC):
     def _parse_article_content(self, content: bs4.BeautifulSoup) -> List[str]:
         pass
 
-    @staticmethod
-    def _get_article_site(url: str) -> Optional[bs4.BeautifulSoup]:
-        response = requests.get(url)
+    def _get_article_site(self, url: str) -> Optional[bs4.BeautifulSoup]:
+        response = requests.get(url, headers=self.__headers)
+
         if response.status_code == requests.codes.ok:
             return bs4.BeautifulSoup(response.content, 'html.parser')
         else:
