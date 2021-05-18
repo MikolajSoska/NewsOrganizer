@@ -1,8 +1,16 @@
-CREATE TABLE `countries`
+CREATE TABLE `languages`
 (
     `id`   int PRIMARY KEY AUTO_INCREMENT,
     `name` varchar(255) UNIQUE NOT NULL,
     `code` varchar(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE `countries`
+(
+    `id`          int PRIMARY KEY AUTO_INCREMENT,
+    `name`        varchar(255) UNIQUE NOT NULL,
+    `code`        varchar(255) UNIQUE NOT NULL,
+    `language_id` int                 NOT NULL
 );
 
 CREATE TABLE `news_sites`
@@ -38,6 +46,9 @@ CREATE TABLE `article_tag_map`
     `tag_id`     int NOT NULL,
     `position`   int NOT NULL
 );
+
+ALTER TABLE `countries`
+    ADD FOREIGN KEY (`language_id`) REFERENCES `languages` (`id`);
 
 ALTER TABLE `news_sites`
     ADD FOREIGN KEY (`country_id`) REFERENCES `countries` (`id`);

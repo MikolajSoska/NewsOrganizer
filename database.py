@@ -17,10 +17,10 @@ class DatabaseConnector(metaclass=Singleton):
         self.__cursor = self.__database.cursor()
 
     def get_countries(self) -> List[Country]:
-        query = 'SELECT * FROM countries'
+        query = 'SELECT c.name, c.code, l.code FROM countries c INNER JOIN languages l on c.language_id = l.id'
         self.__cursor.execute(query)
 
-        return [Country(name, code) for _, name, code in self.__cursor.fetchall()]
+        return [Country(name, code, language) for name, code, language in self.__cursor.fetchall()]
 
     def get_news_sites(self, country: Country) -> List[NewsSite]:
         query = 'SELECT news_sites.name, news_sites.code FROM news_sites INNER JOIN countries ON ' \

@@ -22,7 +22,7 @@ class NewsGetter:
             'pageSize': 100,
             'sources': ','.join(self.__parsers_manager.get_news_sites(country.code)),
             'from': datetime.now() - timedelta(days=1),
-            'language': 'en',
+            'language': country.language,
             'sortBy': 'popularity',
         }
 

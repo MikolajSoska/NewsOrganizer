@@ -7,6 +7,7 @@ from typing import List
 class Country:
     name: str
     code: str
+    language: str
 
 
 @dataclass(init=True, repr=True, eq=False)
