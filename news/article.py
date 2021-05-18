@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 @dataclass(init=True, repr=True, eq=False)
@@ -25,3 +25,4 @@ class NewsArticle:
     article_date: datetime
     news_site: NewsSite
     image_url: str
+    summary: Optional[str] = None
