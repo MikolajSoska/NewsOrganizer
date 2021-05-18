@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-import model.utils as utils
+import neural.model.utils as utils
 
 
 class BiLSTMConv(nn.Module):

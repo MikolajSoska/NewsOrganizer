@@ -3,9 +3,9 @@ import time
 
 import torch
 
-import model.utils as utils
-from model.text_summarization.dataloader import SummarizationDataset, SummarizationDataLoader
-from model.text_summarization.pointer_generator import PointerGeneratorNetwork
+import neural.model.utils as utils
+from neural.model.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
+from neural.model.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
 
 device = 'cuda'
@@ -28,7 +28,7 @@ optimizer = torch.optim.Adagrad(model.parameters(), lr=0.15, initial_accumulator
 
 if load_checkpoint:
     print('Loading checkpoint...')
-    checkpoint = torch.load('data/weights/summarization-model.pt')
+    checkpoint = torch.load('../data/weights/summarization-model.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch_start = checkpoint['epoch']
@@ -86,7 +86,7 @@ for epoch in range(epoch_start, epochs):
                 'model_state_dict':
                     model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
-            }, 'data/weights/summarization-model.pt')
+            }, '../data/weights/summarization-model.pt')
             time_start = time.time()
             memory = round(torch.cuda.memory_reserved(0) / (1024 ** 3), 2)  # To GB
             loss = sum(running_loss) / len(running_loss)

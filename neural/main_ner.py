@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
 
-from model.ner.dataloader import NERDataset, NERDataLoader
-from model.ner.bilstm_cnn import BiLSTMConv
+from neural.model.ner.bilstm_cnn import BiLSTMConv
+from neural.model.ner.dataloader import NERDataset, NERDataLoader
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -15,7 +15,7 @@ random.seed(0)
 epochs = 5
 batch_size = 9
 
-dataset = NERDataset('data/ner_dataset.csv', embedding='glove.6B.50d')
+dataset = NERDataset('../data/ner_dataset.csv', embedding='glove.6B.50d')
 loader = NERDataLoader(dataset, batch_size=batch_size)
 
 model = BiLSTMConv(embeddings=dataset.vocab.vectors, output_size=dataset.labels_count,
@@ -59,4 +59,4 @@ for epoch in range(epochs):
             true_tags = []
             pred_tags = []
 
-torch.save(model.state_dict(), 'data/weights/model')
+torch.save(model.state_dict(), '../data/weights/model')

@@ -33,7 +33,7 @@ class SpecialTokens(enum.Enum):
 
 class SummarizationDataset(Dataset):
     def __init__(self, dataset_name: str, max_article_length: int, max_summary_length: int, vocab_size: int,
-                 get_oov: bool = False, vocab_dir: str = 'data/vocabs', data_dir: str = 'data/datasets'):
+                 get_oov: bool = False, vocab_dir: str = '../data/vocabs', data_dir: str = '../data/datasets'):
         self.get_oov = get_oov
         self.vocab = self.__build_vocab(dataset_name, vocab_dir, vocab_size)
         self.__dataset = self.__build_dataset(dataset_name, data_dir)
