@@ -67,7 +67,7 @@ for epoch in range(epoch_start, epochs):
         targets = targets.to(device=device)
 
         oov_size = len(max(oov_list, key=lambda x: len(x)))
-        output, attention, coverage = model(texts, texts_lengths, summaries, texts_extended, oov_size)
+        output, attention, coverage = model(texts, texts_lengths, texts_extended, oov_size, summaries)
         loss = criterion(output, targets, summaries_lengths)
         if coverage is not None:
             loss = loss + criterion_coverage(attention, coverage, targets)
@@ -92,3 +92,19 @@ for epoch in range(epoch_start, epochs):
             loss = sum(running_loss) / len(running_loss)
             print(f'Epoch: {epoch} Iter: {i}/{len(loader)} Loss: {loss}, Time: {time_iter} seconds, '
                   f'Memory: {memory} GB')
+
+            # article_tokens = texts[:, 0]
+            # article = []
+            # for token in article_tokens:
+            #     if token == 0:
+            #         continue
+            #     article.append(dataset.get_vocab().itos[token])
+            # print('Article:')
+            # print(' '.join(article))
+            # predictions = output
+            # text = []
+            # for prediction in predictions:
+            #     index = torch.argmax(prediction[0])
+            #     text.append(dataset.get_vocab().itos[index])
+            # print('Summary:')
+            # print(' '.join(text))

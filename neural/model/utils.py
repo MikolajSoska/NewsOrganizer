@@ -29,6 +29,9 @@ class PackedRNN(nn.Module):
     def forward(self, sequence: Tensor, sequence_lengths: Tensor,
                 *rnn_args: Any) -> Tuple[Tensor, Union[Tensor, Tuple[Tensor, ...]]]:
         lengths = sequence_lengths.squeeze().tolist()
+        if sequence_lengths.shape[0] == 1:
+            lengths = [lengths]
+
         sequence_packed = pack_padded_sequence(sequence, lengths, enforce_sorted=False)
         output, hidden = self.rnn_module(sequence_packed, *rnn_args)
         output_padded, _ = pad_packed_sequence(output, total_length=int(sequence_lengths.max()))

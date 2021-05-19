@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 
 @dataclass(init=True, repr=True, eq=False)
@@ -20,7 +20,7 @@ class NewsSite:
 @dataclass(init=True, repr=True, eq=False)
 class NewsArticle:
     title: str
-    content: List[str]
+    content: str  # TODO: change back to list with mechanism to restore division into paragraphs
     article_url: str
     article_date: datetime
     news_site: NewsSite

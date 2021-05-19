@@ -35,6 +35,6 @@ class DatabaseConnector(metaclass=Singleton):
         site_id = self.__cursor.fetchone()[0]
 
         query = 'INSERT INTO news_articles VALUES (0, %s, %s, %s, %s, %s, %s, %s)'
-        self.__cursor.execute(query, (article.title, ' '.join(article.content), article.article_url,
+        self.__cursor.execute(query, (article.title, article.content, article.article_url,
                                       article.article_date, site_id, article.image_url, article.summary))
         self.__database.commit()

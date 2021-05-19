@@ -150,9 +150,13 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int = 128, hidden_size: int = 256):
+    def __init__(self, vocab_size: int, bos_index: int, eos_index: int, embedding_dim: int = 128,
+                 hidden_size: int = 256, max_summary_length: int = 100):
         super().__init__()
         self.hidden_size = hidden_size
+        self.max_summary_length = max_summary_length
+        self.bos_index = bos_index
+        self.eos_index = eos_index
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
@@ -160,8 +164,15 @@ class PointerGeneratorNetwork(nn.Module):
     def activate_coverage(self):
         self.with_coverage = True
 
-    def forward(self, texts: Tensor, texts_lengths: Tensor, summaries: Tensor, texts_extended: Tensor,
-                oov_size: int) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
+    def forward(self, texts: Tensor, texts_lengths: Tensor, texts_extended: Tensor,
+                oov_size: int, summaries: Tensor = None) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
+        if summaries is None:
+            if self.training:
+                raise AttributeError('During training reference summaries must be provided.')
+            else:
+                summaries = torch.full((self.max_summary_length, texts.shape[1]), self.bos_index, dtype=torch.long,
+                                       device=texts.device)
+
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         encoder_mask = torch.clip(texts, min=0, max=1)
         device = texts.device
@@ -186,6 +197,12 @@ class PointerGeneratorNetwork(nn.Module):
             outputs.append(decoder_out)
             attention_list.append(attention)
             coverage_list.append(coverage)
+
+            if not self.training and i + 1 < summaries.shape[0]:
+                summaries[i + 1, :] = torch.argmax(decoder_out)
+
+            if torch.argmax(decoder_out) == self.eos_index:
+                break
 
         outputs = torch.stack(outputs)
         attentions = torch.stack(attention_list)

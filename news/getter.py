@@ -38,7 +38,7 @@ class NewsGetter:
 
                 articles.append(NewsArticle(
                     title=article['title'],
-                    content=content,
+                    content=' '.join(content),
                     article_url=article['url'],
                     article_date=datetime.fromisoformat(article['publishedAt'][:-1]),
                     news_site=news_site,
