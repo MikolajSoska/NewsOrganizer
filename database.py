@@ -38,3 +38,21 @@ class DatabaseConnector(metaclass=Singleton):
         self.__cursor.execute(query, (article.title, article.content, article.article_url,
                                       article.article_date, site_id, article.image_url, article.summary))
         self.__database.commit()
+        article_id = self.__cursor.lastrowid
+        for position, tag in article.named_entities.items():
+            tag_id = self.__get_tag_id(tag)
+            query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s)'
+            self.__cursor.execute(query, (article_id, tag_id, position))
+            self.__database.commit()
+
+    def __get_tag_id(self, tag: str) -> int:
+        query = 'SELECT id FROM tags WHERE name = %s'
+        self.__cursor.execute(query, (tag,))
+        tag_id = self.__cursor.fetchone()
+        if tag_id is None:
+            query = 'INSERT INTO tags VALUES (0, %s)'
+            self.__cursor.execute(query, (tag,))
+            self.__database.commit()
+            return self.__cursor.lastrowid
+        else:
+            return tag_id[0]
