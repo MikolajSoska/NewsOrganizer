@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NewsOrganizer</title>
+</head>
+<body>
+<div>
+    {% for article in articles %}
+    <a href=http://localhost:5001/article/{{ loop.index }}><h4>{{ article.title }}</h4></a>
+    <p>{{ article.article_date }}, {{ article.news_site.name }}</p>
+    <div>
+        <img src={{ article.image_url }} height="100px" width="auto">
+        <p>{{ article.summary }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>

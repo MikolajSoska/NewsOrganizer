@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import mysql.connector as mysql
 
@@ -56,3 +56,30 @@ class DatabaseConnector(metaclass=Singleton):
             return self.__cursor.lastrowid
         else:
             return tag_id[0]
+
+    def get_articles(self) -> List[NewsArticle]:
+        query = 'SELECT * FROM news_articles'
+        self.__cursor.execute(query)
+        articles = []
+        for data in self.__cursor.fetchall():
+            news_site = self.__get_news_site(data[5])
+            article = NewsArticle(data[1], data[2], data[3], data[4], news_site, data[6], data[7])
+            for position, tag in self.__get_named_entities(data[0]):
+                article.named_entities[position] = tag
+            articles.append(article)
+
+        return articles
+
+    def __get_news_site(self, site_id: int) -> NewsSite:
+        query = 'SELECT news_sites.name, news_sites.code FROM news_sites INNER JOIN countries ON ' \
+                'news_sites.country_id = countries.id WHERE news_sites.id = %s'
+        self.__cursor.execute(query, (site_id,))
+        name, code = self.__cursor.fetchone()
+
+        return NewsSite(name, code, Country('United States', 'us', 'en'))
+
+    def __get_named_entities(self, article_id: int) -> List[Tuple[int, str]]:
+        query = 'SELECT position, name FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
+                'WHERE article_id = %s'
+        self.__cursor.execute(query, (article_id,))
+        return self.__cursor.fetchall()

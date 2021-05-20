@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ article.title }}</title>
+</head>
+<body>
+<h2>{{ article.title }}</h2>
+<div><img src={{ article.image_url }} height="300px" width="auto"></div>
+<a href={{ article.article_url }}>Original article</a>
+<div>{{ article.article_date }}, {{ article.news_site.name }}</div>
+<br>
+<div>{{ content | safe}}</div>
+</body>
+</html>
