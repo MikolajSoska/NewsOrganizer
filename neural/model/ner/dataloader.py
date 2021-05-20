@@ -48,7 +48,7 @@ class NERDataset(Dataset):
 
     def __create_vocab(self, words: List[str], embedding: str) -> None:
         counter = Counter(set(words))
-        self.vocab = Vocab(counter, vectors=embedding, specials=['<pad>', '<unk>'])
+        self.vocab = Vocab(counter, vectors=embedding, specials=['<pad>', '<unk>'], vectors_cache='../.vector_cache')
 
     def __initialize_dictionaries(self, labels: List[str], words: Set[str]) -> None:
         self.label_to_index = {'<pad>': self.labels_count}
