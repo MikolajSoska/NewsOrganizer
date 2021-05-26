@@ -51,6 +51,7 @@ class Trainer:
 
         for name, model in self.model.items():
             self.model.name = model.to(self.device)
+            self.model.name.train()
 
         for optimizer in self.optimizer.values():  # Reload optimizer to get correct model device
             optimizer.load_state_dict(optimizer.state_dict())
@@ -87,7 +88,7 @@ class Trainer:
             self.current_iteration += 1
 
             if self.current_iteration % save_interval == 0:
-                self.__save_checkpoint(epoch, i)
+                self.__save_checkpoint(epoch, i + 1)
 
             if self.current_iteration % verbosity == 0:
                 self.__log_progress(running_loss, time_start, epoch, i)

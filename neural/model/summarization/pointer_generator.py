@@ -150,13 +150,12 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, bos_index: int, eos_index: int, embedding_dim: int = 128,
-                 hidden_size: int = 256, max_summary_length: int = 100):
+    def __init__(self, vocab_size: int, bos_index: int, embedding_dim: int = 128, hidden_size: int = 256,
+                 max_summary_length: int = 100):
         super().__init__()
         self.hidden_size = hidden_size
         self.max_summary_length = max_summary_length
         self.bos_index = bos_index
-        self.eos_index = eos_index
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
@@ -199,10 +198,7 @@ class PointerGeneratorNetwork(nn.Module):
             coverage_list.append(coverage)
 
             if not self.training and i + 1 < summaries.shape[0]:
-                summaries[i + 1, :] = torch.argmax(decoder_out)
-
-            if torch.argmax(decoder_out) == self.eos_index:
-                break
+                summaries[i + 1, :] = torch.argmax(decoder_out, dim=1)
 
         outputs = torch.stack(outputs)
         attentions = torch.stack(attention_list)
