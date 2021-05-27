@@ -45,7 +45,8 @@ def main():
         train_loader=loader,
         epochs=epochs,
         batch_size=batch_size,
-        save_path='../data/weights/summarization-model.pt',
+        save_path='../data/weights',
+        model_name='summarization-model',
         use_cuda=True,
         coverage_iterations=coverage_iterations
     )

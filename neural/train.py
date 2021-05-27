@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import gc
 import os
+import re
 import time
+from pathlib import Path
 from typing import List, Tuple, Callable, Optional, Any
 
 import torch
@@ -16,8 +18,9 @@ from utils.general import convert_bytes_to_megabytes
 
 
 class Trainer:
-    def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tensor], train_loader: DataLoader,
-                 epochs: int, batch_size: int, save_path: str, use_cuda: bool, **params: Any):
+    def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tensor], train_loader: DataLoader, epochs: int,
+                 batch_size: int, save_path: str, model_name: str, use_cuda: bool, max_model_backup: int = 3,
+                 **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
@@ -25,8 +28,10 @@ class Trainer:
         self.train_loader = train_loader
         self.epochs = epochs
         self.batch_size = batch_size
-        self.save_path = save_path
+        self.save_path = Path(save_path)
+        self.model_name = model_name
         self.device = self.__get_device(use_cuda)
+        self.max_model_backup = max_model_backup
         self.params = DotMap(params)
 
         self.current_epoch = 0
@@ -43,6 +48,7 @@ class Trainer:
 
     def train(self, load_checkpoint: bool, verbosity: int, save_interval: int) -> None:
         self.__check_initialization()
+        self.save_path.mkdir(parents=True, exist_ok=True)
         if load_checkpoint:
             iteration, epoch_start = self.__load_checkpoint()
         else:
@@ -129,8 +135,10 @@ class Trainer:
 
     def __load_checkpoint(self) -> Tuple[int, int]:
         print('Loading checkpoint...')
-        if os.path.exists(self.save_path):
-            checkpoint = torch.load(self.save_path)
+
+        checkpoints = self.__get_checkpoint_list()
+        if len(checkpoints) > 0:
+            checkpoint = torch.load(self.save_path / Path(checkpoints[0]))
             for name, model in self.model.items():
                 model.load_state_dict(checkpoint[f'{name}_state_dict'])
             for name, optimizer in self.optimizer.items():
@@ -141,7 +149,7 @@ class Trainer:
             print(f'Epoch set to {epoch_start}. Iteration set to {iteration}.')
             del checkpoint
         else:
-            print(f'Checkpoint {self.save_path} doesn\'t exist. Starting training from 0.')
+            print(f'Checkpoint for model {self.model_name} in {self.save_path} doesn\'t exist. Training from scratch.')
             iteration = 0
             epoch_start = 0
 
@@ -160,7 +168,18 @@ class Trainer:
         for name, optimizer in self.optimizer.items():
             checkpoint[f'{name}-optimizer_state_dict'] = optimizer.state_dict()
 
-        torch.save(checkpoint, self.save_path)
+        checkpoint_name = Path(f'{self.model_name}-e{epoch}i{iteration * self.batch_size}.pt')
+        torch.save(checkpoint, self.save_path / checkpoint_name)
+        self.__remove_old_checkpoints()
+
+    def __get_checkpoint_list(self) -> List[str]:
+        name_pattern = re.compile(rf'^{self.model_name}-e\d+i\d+\.pt$')
+        return list(sorted(filter(name_pattern.match, os.listdir(self.save_path)), reverse=True))
+
+    def __remove_old_checkpoints(self) -> None:
+        checkpoints = self.__get_checkpoint_list()[self.max_model_backup:]
+        for checkpoint in checkpoints:
+            (self.save_path / Path(checkpoint)).unlink()
 
     def __convert_input_to_device(self, inputs: Tuple[Any, ...]) -> Tuple[Any, ...]:
         inputs_in_device = []
