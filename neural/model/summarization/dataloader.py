@@ -34,11 +34,20 @@ class SpecialTokens(enum.Enum):
 class SummarizationDataset(Dataset):
     def __init__(self, dataset_name: str, max_article_length: int, max_summary_length: int, vocab_size: int,
                  get_oov: bool = False, vocab_dir: str = '../data/vocabs', data_dir: str = '../data/datasets'):
-        self.get_oov = get_oov
-        self.vocab = self.__build_vocab(dataset_name, vocab_dir, vocab_size)
+        self.__get_oov = get_oov
+        self.__vocab = self.__build_vocab(dataset_name, vocab_dir, vocab_size)
         self.__dataset = self.__build_dataset(dataset_name, data_dir)
         self.__max_article_length = max_article_length
         self.__max_summary_length = max_summary_length
+
+    def token_to_index(self, token: Union[str, SpecialTokens]) -> int:
+        if isinstance(token, SpecialTokens):
+            token = token.value
+
+        return self.__vocab.stoi[token]
+
+    def index_to_token(self, index: int) -> str:
+        return self.__vocab.itos[index]
 
     def __build_vocab(self, dataset_name: str, vocab_dir: str, vocab_size: int) -> Vocab:
         vocab_path = f'{vocab_dir}/vocab-summarization-{vocab_size}-{dataset_name}.pt'
@@ -56,7 +65,7 @@ class SummarizationDataset(Dataset):
 
     def __build_dataset(self, dataset_name: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[str]]]:
         dataset_path = f'{data_dir}/dataset-summarization-{dataset_name}-vocab-' \
-                       f'{len(self.vocab) - len(SpecialTokens.get_tokens())}.pt'
+                       f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
             return torch.load(dataset_path)
 
@@ -76,14 +85,14 @@ class SummarizationDataset(Dataset):
         token_indexes = []
         oov_list = oov_list or []
         for token in tokens:
-            token_index = self.vocab.stoi[token.lower()]
-            if token_index == self.vocab.unk_index:
+            token_index = self.__vocab.stoi[token.lower()]
+            if token_index == self.__vocab.unk_index:
                 if token.lower() not in oov_list:
                     if update_oov:
                         oov_list.append(token.lower())
-                        token_index = len(self.vocab) + oov_list.index(token.lower())
+                        token_index = len(self.__vocab) + oov_list.index(token.lower())
                 else:
-                    token_index = len(self.vocab) + oov_list.index(token.lower())
+                    token_index = len(self.__vocab) + oov_list.index(token.lower())
             token_indexes.append(token_index)
 
         return torch.tensor(token_indexes, dtype=torch.long), oov_list
@@ -116,16 +125,16 @@ class SummarizationDataset(Dataset):
         else:
             summary = summary[:-1]  # Remove EOS token
 
-        if self.get_oov:
+        if self.__get_oov:
             text_without_oov = torch.clone(text)
-            text_without_oov[text >= len(self.vocab)] = self.vocab.unk_index
+            text_without_oov[text >= len(self.__vocab)] = self.__vocab.unk_index
             summary_without_oov = torch.clone(summary)
-            summary_without_oov[summary >= len(self.vocab)] = self.vocab.unk_index
+            summary_without_oov[summary >= len(self.__vocab)] = self.__vocab.unk_index
             return text_without_oov, summary_without_oov, text, summary, target, oov_list
         else:  # Replace OOV tokens with UNK
-            text[text >= len(self.vocab)] = self.vocab.unk_index
-            summary[summary >= len(self.vocab)] = self.vocab.unk_index
-            target[target >= len(self.vocab)] = self.vocab.unk_index
+            text[text >= len(self.__vocab)] = self.__vocab.unk_index
+            summary[summary >= len(self.__vocab)] = self.__vocab.unk_index
+            target[target >= len(self.__vocab)] = self.__vocab.unk_index
             return text, summary, target
 
     def __len__(self) -> int:
@@ -133,16 +142,16 @@ class SummarizationDataset(Dataset):
 
 
 class SummarizationDataLoader(DataLoader):
-    def __init__(self, dataset: SummarizationDataset, batch_size: int):
+    def __init__(self, dataset: SummarizationDataset, batch_size: int, get_oov: bool):
         super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
-        self.get_oov = dataset.get_oov
+        self.__get_oov = get_oov
 
     def __generate_batch(self, batch: List) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor],
                                                      Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor,
                                                            Tuple[List[str]]]]:
         oov_list = None
         texts_extended_padded = None
-        if self.get_oov:
+        if self.__get_oov:
             texts, summaries, texts_extended, summaries_extended, targets, oov_list = zip(*batch)
             texts_extended_padded = pad_sequence(texts_extended)
         else:
@@ -154,7 +163,7 @@ class SummarizationDataLoader(DataLoader):
         summaries_padded = pad_sequence(summaries)
         targets_padded = pad_sequence(targets)
 
-        if self.get_oov:
+        if self.__get_oov:
             return texts_padded, texts_lengths, summaries_padded, summaries_lengths, texts_extended_padded, \
                    targets_padded, oov_list
         else:

@@ -20,11 +20,11 @@ class NewsPredictor:
                                 max_word_length=self.__ner_dataset.max_word_length, char_embedding_size=25)
         self.__load_ner_model()
         self.__summarization_dataset = SummarizationDataset('cnn_dailymail', max_article_length=400,
-                                                            max_summary_length=100, vocab_size=150000, get_oov=False,
+                                                            max_summary_length=100, vocab_size=50000, get_oov=True,
                                                             vocab_dir='../data/vocabs', data_dir='../data/datasets')
-        bos_index = self.__summarization_dataset.vocab.stoi[SpecialTokens.BOS.value]
-        eos_index = self.__summarization_dataset.vocab.stoi[SpecialTokens.EOS.value]
-        self.__summarization = PointerGeneratorNetwork(len(self.__summarization_dataset.vocab), bos_index, eos_index)
+
+        bos_index = self.__summarization_dataset.token_to_index(SpecialTokens.BOS)
+        self.__summarization = PointerGeneratorNetwork(50000 + len(SpecialTokens), bos_index)
         self.__load_summarization_model()
         self.__tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
 
@@ -45,7 +45,7 @@ class NewsPredictor:
     def __create_summarization(self, article_content: str) -> str:
         tokens = self.__tokenizer(article_content)
         tokens = [SpecialTokens.BOS.value] + tokens + [SpecialTokens.EOS.value]
-        article_tensor = torch.tensor([self.__summarization_dataset.vocab.stoi[token.lower()] for token in tokens],
+        article_tensor = torch.tensor([self.__summarization_dataset.token_to_index(token.lower()) for token in tokens],
                                       device=self.__device)
         article_tensor = article_tensor.unsqueeze(1)
         article_length = torch.tensor(len(tokens)).unsqueeze(0)
@@ -54,7 +54,7 @@ class NewsPredictor:
         summary = []
         for output in summary_out:
             token = torch.argmax(output).item()
-            summary.append(self.__summarization_dataset.vocab.itos[token])
+            summary.append(self.__summarization_dataset.index_to_token(token))
 
         return ' '.join(summary)
 

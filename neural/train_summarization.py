@@ -36,9 +36,9 @@ def main():
 
     dataset = SummarizationDataset('cnn_dailymail', max_article_length=400, max_summary_length=100,
                                    vocab_size=vocab_size, get_oov=True)
-    loader = SummarizationDataLoader(dataset, batch_size=batch_size)
-    bos_index = dataset.token_to_index(SpecialTokens.BOS.value)
-    model = PointerGeneratorNetwork(len(dataset.vocab), bos_index)
+    loader = SummarizationDataLoader(dataset, batch_size=batch_size, get_oov=True)
+    bos_index = dataset.token_to_index(SpecialTokens.BOS)
+    model = PointerGeneratorNetwork(vocab_size + len(SpecialTokens), bos_index)
 
     trainer = Trainer(
         train_step=train_step,
