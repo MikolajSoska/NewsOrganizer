@@ -58,14 +58,16 @@ class Trainer:
 
         self.current_iteration = (epoch_start + 1) * iteration
         running_loss = []
+        memory_usage = []
 
         for epoch in range(epoch_start, self.epochs):
             self.current_epoch = epoch
-            running_loss = self.__train_epoch(running_loss, epoch, iteration, save_interval, verbosity)
+            running_loss = self.__train_epoch(running_loss, memory_usage, epoch, iteration, save_interval, verbosity)
 
-    def __train_epoch(self, running_loss: List[float], epoch: int, from_iteration: int, save_interval: int,
-                      verbosity: int) -> List[float]:
+    def __train_epoch(self, running_loss: List[float], memory_usage: List[float], epoch: int, from_iteration: int,
+                      save_interval: int, verbosity: int) -> List[float]:
         time_start = time.time()
+        gc.collect()
         for i, inputs in enumerate(self.train_loader):
             if i < from_iteration:
                 continue
@@ -76,8 +78,6 @@ class Trainer:
                 optimizer.zero_grad(set_to_none=True)
 
             torch.cuda.empty_cache()
-            gc.collect()
-
             inputs = self.__convert_input_to_device(inputs)
             loss = self.train_step(self, inputs)
             loss.backward()
@@ -85,15 +85,18 @@ class Trainer:
                 optimizer.step()
 
             running_loss.append(loss.item())
+            if self.device.type == 'cuda':
+                memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
             self.current_iteration += 1
 
             if self.current_iteration % save_interval == 0:
                 self.__save_checkpoint(epoch, i + 1)
 
             if self.current_iteration % verbosity == 0:
-                self.__log_progress(running_loss, time_start, epoch, i)
+                self.__log_progress(running_loss, memory_usage, time_start, epoch, i)
                 time_start = time.time()
                 running_loss.clear()
+                memory_usage.clear()
 
         return running_loss
 
@@ -168,13 +171,14 @@ class Trainer:
 
         return tuple(inputs_in_device)
 
-    def __log_progress(self, running_loss: List[float], time_start: float, epoch: int, iteration: int) -> None:
+    def __log_progress(self, running_loss: List[float], memory_usage: List[float], time_start: float, epoch: int,
+                       iteration: int) -> None:
         average_loss = sum(running_loss) / len(running_loss)
         time_iter = round(time.time() - time_start, 2)
         status_message = f'Epoch: {epoch} Iter: {iteration}/{len(self.train_loader)} Loss: {average_loss}, ' \
                          f'Time: {time_iter} seconds'
-        if self.device.type == 'cuda':
-            memory = convert_bytes_to_megabytes(torch.cuda.memory_reserved(0))
-            status_message = f'{status_message}, Memory: {memory} MB'
+        if len(memory_usage) > 0:
+            memory = sum(memory_usage) / len(memory_usage)
+            status_message = f'{status_message}, Average memory use: {memory} MB'
 
         print(status_message)
