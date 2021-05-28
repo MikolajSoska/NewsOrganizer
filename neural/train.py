@@ -197,7 +197,10 @@ class Trainer:
     def __remove_old_checkpoints(self) -> None:
         checkpoints = self.__get_checkpoint_list()[self.max_model_backup:]
         for checkpoint in checkpoints:
-            (self.save_path / Path(checkpoint)).unlink()
+            try:
+                (self.save_path / Path(checkpoint)).unlink()
+            except PermissionError as error:
+                print(f'Can\'t remove old checkpoint {checkpoint}. Permission error: {error}.')
 
     def __convert_input_to_device(self, inputs: Tuple[Any, ...]) -> Tuple[Any, ...]:
         inputs_in_device = []
