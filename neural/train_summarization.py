@@ -24,6 +24,10 @@ def train_step(train: Trainer, inputs: Tuple[Any, ...]) -> Tensor:
     if coverage is not None:
         loss = loss + train.criterion.coverage(attention, coverage, targets)
 
+    del output
+    del attention
+    del coverage
+
     return loss
 
 
@@ -48,6 +52,7 @@ def main():
         save_path='../data/weights',
         model_name='summarization-model',
         use_cuda=True,
+        load_checkpoint=True,
         coverage_iterations=coverage_iterations
     )
     trainer.set_models(
@@ -60,11 +65,7 @@ def main():
     trainer.set_optimizer(
         adagrad=torch.optim.Adagrad(model.parameters(), lr=0.15, initial_accumulator_value=0.1)
     )
-    trainer.train(
-        load_checkpoint=True,
-        verbosity=50,
-        save_interval=50
-    )
+    trainer.train()
 
 
 if __name__ == '__main__':

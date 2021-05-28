@@ -19,8 +19,8 @@ from utils.general import convert_bytes_to_megabytes
 
 class Trainer:
     def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tensor], train_loader: DataLoader, epochs: int,
-                 batch_size: int, save_path: str, model_name: str, use_cuda: bool, max_model_backup: int = 3,
-                 **params: Any):
+                 batch_size: int, save_path: str, model_name: str, use_cuda: bool, load_checkpoint: bool,
+                 verbosity: int = 50, save_interval: int = 50, max_model_backup: int = 3, **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
@@ -31,6 +31,9 @@ class Trainer:
         self.save_path = Path(save_path)
         self.model_name = model_name
         self.device = self.__get_device(use_cuda)
+        self.load_checkpoint = load_checkpoint
+        self.verbosity = verbosity
+        self.save_interval = save_interval
         self.max_model_backup = max_model_backup
         self.params = DotMap(params)
 
@@ -46,10 +49,28 @@ class Trainer:
     def set_optimizer(self, **optimizer: Optimizer) -> None:
         self.optimizer = DotMap(optimizer)
 
-    def train(self, load_checkpoint: bool, verbosity: int, save_interval: int) -> None:
+    def train(self) -> None:
         self.__check_initialization()
         self.save_path.mkdir(parents=True, exist_ok=True)
-        if load_checkpoint:
+        oom_occurred = False
+
+        try:
+            self.__train()
+        except RuntimeError as error:
+            if 'CUDA out of memory' in str(error):
+                print(f'Caught OOM exception: {error}. Restarting training from most recent checkpoint.')
+                oom_occurred = True
+            else:
+                raise error
+
+        if oom_occurred:
+            torch.cuda.empty_cache()
+            gc.collect()
+            self.load_checkpoint = True  # Restart from checkpoint
+            self.train()
+
+    def __train(self) -> None:
+        if self.load_checkpoint:
             iteration, epoch_start = self.__load_checkpoint()
         else:
             iteration = 0
@@ -68,22 +89,20 @@ class Trainer:
 
         for epoch in range(epoch_start, self.epochs):
             self.current_epoch = epoch
-            running_loss = self.__train_epoch(running_loss, memory_usage, epoch, iteration, save_interval, verbosity)
+            self.__train_epoch(running_loss, memory_usage, epoch, iteration)
+            iteration = 0
 
-    def __train_epoch(self, running_loss: List[float], memory_usage: List[float], epoch: int, from_iteration: int,
-                      save_interval: int, verbosity: int) -> List[float]:
+    def __train_epoch(self, running_loss: List[float], memory_usage: List[float], epoch: int,
+                      from_iteration: int) -> None:
         time_start = time.time()
         gc.collect()
         for i, inputs in enumerate(self.train_loader):
             if i < from_iteration:
                 continue
-            else:
-                from_iteration = 0
 
             for optimizer in self.optimizer.values():
                 optimizer.zero_grad(set_to_none=True)
 
-            torch.cuda.empty_cache()
             inputs = self.__convert_input_to_device(inputs)
             loss = self.train_step(self, inputs)
             loss.backward()
@@ -91,20 +110,19 @@ class Trainer:
                 optimizer.step()
 
             running_loss.append(loss.item())
+            del loss
             if self.device.type == 'cuda':
                 memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
             self.current_iteration += 1
 
-            if self.current_iteration % save_interval == 0:
+            if self.current_iteration % self.save_interval == 0:
                 self.__save_checkpoint(epoch, i + 1)
 
-            if self.current_iteration % verbosity == 0:
+            if self.current_iteration % self.verbosity == 0:
                 self.__log_progress(running_loss, memory_usage, time_start, epoch, i)
                 time_start = time.time()
                 running_loss.clear()
                 memory_usage.clear()
-
-        return running_loss
 
     @staticmethod
     def __get_device(use_cuda: bool) -> torch.device:
@@ -192,6 +210,7 @@ class Trainer:
 
     def __log_progress(self, running_loss: List[float], memory_usage: List[float], time_start: float, epoch: int,
                        iteration: int) -> None:
+        torch.cuda.empty_cache()
         average_loss = sum(running_loss) / len(running_loss)
         time_iter = round(time.time() - time_start, 2)
         status_message = f'Epoch: {epoch} Iter: {iteration}/{len(self.train_loader)} Loss: {average_loss}, ' \
