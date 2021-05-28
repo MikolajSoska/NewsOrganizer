@@ -14,8 +14,8 @@ def train_step(train: Trainer, inputs: Tuple[Any, ...]) -> Tensor:
     texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list = inputs
     model = train.model.pointer_generator
 
-    if train.current_iteration >= train.params.coverage_iterations and not model.with_coverage:
-        print(f'Iteration {train.current_iteration}. Activated coverage mechanism.')
+    if train.current_iteration >= train.params.iterations_without_coverage and not model.with_coverage:
+        print(f'Iteration {train.current_iteration // train.batch_size}. Activated coverage mechanism.')
         model.activate_coverage()
 
     oov_size = len(max(oov_list, key=lambda x: len(x)))
@@ -43,6 +43,7 @@ def main():
     loader = SummarizationDataLoader(dataset, batch_size=batch_size, get_oov=True)
     bos_index = dataset.token_to_index(SpecialTokens.BOS)
     model = PointerGeneratorNetwork(vocab_size + len(SpecialTokens), bos_index)
+    iterations_without_coverage = len(dataset) - coverage_iterations
 
     trainer = Trainer(
         train_step=train_step,
@@ -53,7 +54,7 @@ def main():
         model_name='summarization-model',
         use_cuda=True,
         load_checkpoint=True,
-        coverage_iterations=coverage_iterations
+        iterations_without_coverage=iterations_without_coverage
     )
     trainer.set_models(
         pointer_generator=model

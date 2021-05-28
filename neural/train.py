@@ -113,12 +113,12 @@ class Trainer:
             del loss
             if self.device.type == 'cuda':
                 memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
-            self.current_iteration += 1
+            self.current_iteration += self.batch_size
 
-            if self.current_iteration % self.save_interval == 0:
+            if self.current_iteration % (self.save_interval * self.batch_size) == 0:
                 self.__save_checkpoint(epoch, i + 1)
 
-            if self.current_iteration % self.verbosity == 0:
+            if self.current_iteration % (self.verbosity * self.batch_size) == 0:
                 self.__log_progress(running_loss, memory_usage, time_start, epoch, i)
                 time_start = time.time()
                 running_loss.clear()
@@ -164,7 +164,7 @@ class Trainer:
             epoch_start = checkpoint['epoch']
             previous_batch_size = checkpoint['batch_size']
             iteration = checkpoint['iteration'] * previous_batch_size // self.batch_size
-            print(f'Epoch set to {epoch_start}. Iteration set to {iteration}.')
+            print(f'Epoch set to {epoch_start}. Iteration set to {iteration} of {len(self.train_loader)}.')
             del checkpoint
         else:
             print(f'Checkpoint for model {self.model_name} in {self.save_path} doesn\'t exist. Training from scratch.')
