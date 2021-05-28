@@ -4,29 +4,29 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-import neural.model.utils as utils
+import neural.common.layers as layers
 
 
 class Encoder(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim=embedding_dim, padding_idx=0)
-        self.lstm = utils.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True))
+        self.lstm = layers.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True))
         self.linear = nn.Sequential(
-            utils.View(-1, 2 * hidden_size),
+            layers.View(-1, 2 * hidden_size),
             nn.Linear(hidden_size * 2, hidden_size * 2)
         )
         self.reduce_hidden = nn.Sequential(
-            utils.View(-1, hidden_size * 2),
+            layers.View(-1, hidden_size * 2),
             nn.Linear(hidden_size * 2, hidden_size),
             nn.ReLU(),
-            utils.Unsqueeze(0)
+            layers.Unsqueeze(0)
         )
         self.reduce_cell = nn.Sequential(
-            utils.View(-1, hidden_size * 2),
+            layers.View(-1, hidden_size * 2),
             nn.Linear(hidden_size * 2, hidden_size),
             nn.ReLU(),
-            utils.Unsqueeze(0)
+            layers.Unsqueeze(0)
         )
 
     def forward(self, texts_in: Tensor, texts_lengths: Tensor) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor]]:
@@ -50,10 +50,10 @@ class Attention(nn.Module):
         self.hidden_size = hidden_size
         self.features = nn.Sequential(
             nn.Linear(hidden_size * 2, hidden_size * 2),
-            utils.Unsqueeze(0),
+            layers.Unsqueeze(0),
         )
         self.coverage = nn.Sequential(
-            utils.View(-1, 1),
+            layers.View(-1, 1),
             nn.Linear(1, hidden_size * 2)
         )
         self.attention_first = nn.Sequential(
@@ -63,9 +63,9 @@ class Attention(nn.Module):
         self.softmax = nn.Softmax(dim=0)
         self.attention_second = nn.Sequential(
             # If encoder_mask sets some weights to zero, than they don't sum to one, so re-normalization is needed
-            utils.Normalize(0),
-            utils.Permute(1, 0),
-            utils.Unsqueeze(1)
+            layers.Normalize(0),
+            layers.Permute(1, 0),
+            layers.Unsqueeze(1)
         )
 
     def forward(self, hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_mask: Tensor,
@@ -103,7 +103,7 @@ class Decoder(nn.Module):
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size)
         self.context = nn.Sequential(
             nn.Linear(hidden_size * 2 + embedding_dim, embedding_dim),
-            utils.Unsqueeze(0)
+            layers.Unsqueeze(0)
         )
         self.pointer_generator = nn.Sequential(
             nn.Linear(hidden_size * 4 + embedding_dim, 1),

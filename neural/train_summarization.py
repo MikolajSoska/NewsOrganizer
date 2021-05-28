@@ -3,10 +3,10 @@ from typing import Tuple, Any
 import torch
 from torch import Tensor
 
-import neural.model.utils as utils
-from neural.model.summarization.dataloader import SummarizationDataset, SummarizationDataLoader, SpecialTokens
-from neural.model.summarization.pointer_generator import PointerGeneratorNetwork
-from neural.train import Trainer
+from neural.common.losses import SummarizationLoss, CoverageLoss
+from neural.common.trainer import Trainer
+from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader, SpecialTokens
+from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
 
 
@@ -60,8 +60,8 @@ def main():
         pointer_generator=model
     )
     trainer.set_criterion(
-        summarization=utils.SummarizationLoss(),
-        coverage=utils.CoverageLoss()
+        summarization=SummarizationLoss(),
+        coverage=CoverageLoss()
     )
     trainer.set_optimizer(
         adagrad=torch.optim.Adagrad(model.parameters(), lr=0.15, initial_accumulator_value=0.1)

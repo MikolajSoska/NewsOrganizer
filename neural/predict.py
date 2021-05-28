@@ -2,10 +2,10 @@ import torch
 from nltk.tokenize import sent_tokenize
 from torchtext.data.utils import get_tokenizer
 
-from neural.model.ner.bilstm_cnn import BiLSTMConv
-from neural.model.ner.dataloader import NERDataset
-from neural.model.summarization.dataloader import SummarizationDataset, SpecialTokens
-from neural.model.summarization.pointer_generator import PointerGeneratorNetwork
+from neural.ner.bilstm_cnn import BiLSTMConv
+from neural.ner.dataloader import NERDataset
+from neural.summarization.dataloader import SummarizationDataset, SpecialTokens
+from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from news.article import NewsArticle
 from utils.general import set_random_seed
 

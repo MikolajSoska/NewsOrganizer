@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
 
-from neural.model.ner.bilstm_cnn import BiLSTMConv
-from neural.model.ner.dataloader import NERDataset, NERDataLoader
+from neural.ner.bilstm_cnn import BiLSTMConv
+from neural.ner.dataloader import NERDataset, NERDataLoader
 
 torch.manual_seed(0)
 np.random.seed(0)
