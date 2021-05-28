@@ -11,7 +11,7 @@
     <p>{{ article.article_date }}, {{ article.news_site.name }}</p>
     <div>
         <img src={{ article.image_url }} height="100px" width="auto">
-        <p>{{ article.summary }}</p>
+        <p><strong>Summary:</strong>{{ article.summary }}</p>
     </div>
     {% endfor %}
 </div>
