@@ -19,8 +19,9 @@ from utils.general import convert_bytes_to_megabytes
 
 class Trainer:
     def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tensor], train_loader: DataLoader, epochs: int,
-                 batch_size: int, save_path: str, model_name: str, use_cuda: bool, load_checkpoint: bool,
-                 verbosity: int = 50, save_interval: int = 50, max_model_backup: int = 3, **params: Any):
+                 batch_size: int, max_gradient_norm: Optional[int], save_path: str, model_name: str, use_cuda: bool,
+                 load_checkpoint: bool, verbosity: int = 50, save_interval: int = 50, max_model_backup: int = 3,
+                 **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
@@ -28,6 +29,7 @@ class Trainer:
         self.train_loader = train_loader
         self.epochs = epochs
         self.batch_size = batch_size
+        self.max_gradient_norm = max_gradient_norm
         self.save_path = Path(save_path)
         self.model_name = model_name
         self.device = self.__get_device(use_cuda)
@@ -106,6 +108,8 @@ class Trainer:
             inputs = self.__convert_input_to_device(inputs)
             loss = self.train_step(self, inputs)
             loss.backward()
+            self.__clip_gradients()
+
             for optimizer in self.optimizer.values():
                 optimizer.step()
 
@@ -123,6 +127,11 @@ class Trainer:
                 time_start = time.time()
                 running_loss.clear()
                 memory_usage.clear()
+
+    def __clip_gradients(self) -> None:
+        if self.max_gradient_norm is not None:
+            for model in self.model.values():
+                nn.utils.clip_grad_norm_(model.parameters(), self.max_gradient_norm)
 
     @staticmethod
     def __get_device(use_cuda: bool) -> torch.device:
