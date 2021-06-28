@@ -219,7 +219,7 @@ class Trainer:
         status_message = f'Epoch: {epoch} Iter: {iteration}/{len(self.train_loader)} Loss: {average_loss}, ' \
                          f'Time: {time_iter} seconds'
         if len(memory_usage) > 0:
-            memory = sum(memory_usage) / len(memory_usage)
+            memory = round(sum(memory_usage) / len(memory_usage), 2)
             status_message = f'{status_message}, Average memory use: {memory} MB'
 
         print(status_message)
