@@ -56,7 +56,7 @@ class SummarizationDataset(Dataset):
         self.__max_summary_length = max_summary_length
 
     def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[str]]]:
-        dataset_path = f'{data_dir}/dataset-summarization-{dataset_name}-vocab-' \
+        dataset_path = f'{data_dir}/dataset-{split}-summarization-{dataset_name}-vocab-' \
                        f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
             return torch.load(dataset_path)

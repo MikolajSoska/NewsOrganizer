@@ -59,14 +59,24 @@ def main():
     train_dataset = dataloader.SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
                                                     max_summary_length=args.max_summary_length, vocab=vocab,
                                                     get_oov=True)
+    validation_dataset = dataloader.SummarizationDataset(args.dataset, 'validation',
+                                                         max_article_length=args.max_article_length,
+                                                         max_summary_length=args.max_summary_length, vocab=vocab,
+                                                         get_oov=True)
+    test_dataset = dataloader.SummarizationDataset(args.dataset, 'test', max_article_length=args.max_article_length,
+                                                   max_summary_length=args.max_summary_length, vocab=vocab,
+                                                   get_oov=True)
+
     train_loader = dataloader.SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
+    validation_loader = dataloader.SummarizationDataLoader(validation_dataset, batch_size=args.batch, get_oov=True)
+    test_loader = dataloader.SummarizationDataLoader(test_dataset, batch_size=args.batch, get_oov=True)
+
     bos_index = vocab.stoi[dataloader.SpecialTokens.BOS]
     model = PointerGeneratorNetwork(args.vocab_size + len(dataloader.SpecialTokens), bos_index)
     iterations_without_coverage = len(train_dataset) - args.coverage
 
     trainer = Trainer(
         train_step=train_step,
-        train_loader=train_loader,
         epochs=args.epochs,
         batch_size=args.batch,
         max_gradient_norm=args.max_gradient_norm,
@@ -86,7 +96,7 @@ def main():
     trainer.set_optimizer(
         adagrad=torch.optim.Adagrad(model.parameters(), lr=args.lr, initial_accumulator_value=args.init_acc_value)
     )
-    trainer.train()
+    trainer.train(train_loader, validation_loader)
 
 
 if __name__ == '__main__':
