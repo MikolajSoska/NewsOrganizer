@@ -1,17 +1,16 @@
 import enum
 import os
 from collections import Counter
-from typing import List, Tuple, Iterator, Union
+from typing import List, Tuple, Union
 
-import datasets
 import torch
-import tqdm
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, T_co
-from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import Vocab
+
+from neural.common.datasets import DatasetGenerator
 
 
 class SpecialTokens(enum.Enum):
@@ -31,46 +30,40 @@ class SpecialTokens(enum.Enum):
         return [token.value for token in SpecialTokens]
 
 
+def build_vocab(dataset_name: str, vocab_size: int, vocab_dir: str = '../data/vocabs') -> Vocab:
+    vocab_path = f'{vocab_dir}/vocab-summarization-{vocab_size}-{dataset_name}.pt'
+    if os.path.exists(vocab_path):
+        return torch.load(vocab_path)
+
+    generator = DatasetGenerator(dataset_name, 'train')  # Generate vocab from train split
+    counter = Counter()
+    for text_tokens, summary_tokens in generator.generate_dataset():
+        counter.update(token.lower() for token in text_tokens + summary_tokens)
+
+    vocab = Vocab(counter, max_size=vocab_size, specials=SpecialTokens.get_tokens())
+
+    torch.save(vocab, vocab_path)
+    return vocab
+
+
 class SummarizationDataset(Dataset):
-    def __init__(self, dataset_name: str, max_article_length: int, max_summary_length: int, vocab_size: int,
-                 get_oov: bool = False, vocab_dir: str = '../data/vocabs', data_dir: str = '../data/datasets'):
+    def __init__(self, dataset_name: str, split: str, max_article_length: int, max_summary_length: int, vocab: Vocab,
+                 get_oov: bool = False, data_dir: str = '../data/datasets'):
+        self.__vocab = vocab
         self.__get_oov = get_oov
-        self.__vocab = self.__build_vocab(dataset_name, vocab_dir, vocab_size)
-        self.__dataset = self.__build_dataset(dataset_name, data_dir)
+        self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
         self.__max_article_length = max_article_length
         self.__max_summary_length = max_summary_length
 
-    def token_to_index(self, token: Union[str, SpecialTokens]) -> int:
-        if isinstance(token, SpecialTokens):
-            token = token.value
-
-        return self.__vocab.stoi[token]
-
-    def index_to_token(self, index: int) -> str:
-        return self.__vocab.itos[index]
-
-    def __build_vocab(self, dataset_name: str, vocab_dir: str, vocab_size: int) -> Vocab:
-        vocab_path = f'{vocab_dir}/vocab-summarization-{vocab_size}-{dataset_name}.pt'
-        if os.path.exists(vocab_path):
-            return torch.load(vocab_path)
-
-        counter = Counter()
-        for text_tokens, summary_tokens in self.__dataset_tokens_generator(dataset_name):
-            counter.update(token.lower() for token in text_tokens + summary_tokens)
-
-        vocab = Vocab(counter, max_size=vocab_size, specials=SpecialTokens.get_tokens())
-
-        torch.save(vocab, vocab_path)
-        return vocab
-
-    def __build_dataset(self, dataset_name: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[str]]]:
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[str]]]:
         dataset_path = f'{data_dir}/dataset-summarization-{dataset_name}-vocab-' \
                        f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
             return torch.load(dataset_path)
 
         dataset = []
-        for text_tokens, summary_tokens in self.__dataset_tokens_generator(dataset_name):
+        generator = DatasetGenerator(dataset_name, split)
+        for text_tokens, summary_tokens in generator.generate_dataset():
             text_tokens = [SpecialTokens.BOS.value] + text_tokens + [SpecialTokens.EOS.value]
             summary_tokens = [SpecialTokens.BOS.value] + summary_tokens + [SpecialTokens.EOS.value]
             text_tensor, oov_list = self.__get_tokens_tensor(text_tokens)
@@ -96,24 +89,6 @@ class SummarizationDataset(Dataset):
             token_indexes.append(token_index)
 
         return torch.tensor(token_indexes, dtype=torch.long), oov_list
-
-    def __dataset_tokens_generator(self, dataset_name: str) -> Iterator[Tuple[List[str], List[str]]]:
-        if dataset_name == 'cnn_dailymail':
-            texts, summaries = self.__get_cnn_dailymail()
-        else:
-            raise ValueError(f'Unsupported dataset: {dataset_name}.')
-
-        tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
-        for text, summary in tqdm.tqdm(zip(texts, summaries), total=len(texts)):
-            text_tokens = tokenizer(text)
-            summary_tokens = tokenizer(summary)
-            yield text_tokens, summary_tokens
-
-    @staticmethod
-    def __get_cnn_dailymail() -> Tuple[List[str], List[str]]:
-        dataset = datasets.load_dataset('cnn_dailymail', '3.0.0', split='train')
-        dataset = dataset.to_dict()
-        return dataset['article'], dataset['highlights']
 
     def __getitem__(self, index: int) -> T_co:
         text, summary, oov_list = self.__dataset[index]

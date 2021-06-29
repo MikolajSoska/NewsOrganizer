@@ -4,15 +4,16 @@ from typing import Tuple, Any
 import torch
 from torch import Tensor
 
+import neural.summarization.dataloader as dataloader
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.trainer import Trainer
-from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader, SpecialTokens
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for text summarization model training.')
+    parser.add_argument('--dataset', choices=['cnn_dailymail'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=13, help='Training epochs')
     parser.add_argument('--batch', type=int, default=8, help='Batch size')
     parser.add_argument('--vocab-size', type=int, default=50000, help='Vocabulary size')
@@ -54,16 +55,18 @@ def main():
     args = parse_args()
     set_random_seed(args.seed)
 
-    dataset = SummarizationDataset('cnn_dailymail', max_article_length=args.max_article_length,
-                                   max_summary_length=args.max_summary_length, vocab_size=args.vocab_size, get_oov=True)
-    loader = SummarizationDataLoader(dataset, batch_size=args.batch, get_oov=True)
-    bos_index = dataset.token_to_index(SpecialTokens.BOS)
-    model = PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index)
-    iterations_without_coverage = len(dataset) - args.coverage
+    vocab = dataloader.build_vocab(args.dataset, vocab_size=args.vocab_size)
+    train_dataset = dataloader.SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
+                                                    max_summary_length=args.max_summary_length, vocab=vocab,
+                                                    get_oov=True)
+    train_loader = dataloader.SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
+    bos_index = vocab.stoi[dataloader.SpecialTokens.BOS]
+    model = PointerGeneratorNetwork(args.vocab_size + len(dataloader.SpecialTokens), bos_index)
+    iterations_without_coverage = len(train_dataset) - args.coverage
 
     trainer = Trainer(
         train_step=train_step,
-        train_loader=loader,
+        train_loader=train_loader,
         epochs=args.epochs,
         batch_size=args.batch,
         max_gradient_norm=args.max_gradient_norm,
