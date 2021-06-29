@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timedelta
 from typing import List
 
@@ -30,7 +31,7 @@ class NewsGetter:
         if response.status_code == requests.codes.ok:
             response = response.json()
             articles = []
-            for article in tqdm.tqdm(response['articles'], desc='Parsing articles'):
+            for article in tqdm.tqdm(response['articles'], desc='Parsing articles', file=sys.stdout):
                 news_site = NewsSite(article['source']['name'], article['source']['id'], country)
                 content = self.__parsers_manager.get_article_content(country.code, news_site.code, article['url'])
                 if len(content) == 0:  # Skip if article content can not be extracted

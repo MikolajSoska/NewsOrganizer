@@ -1,3 +1,4 @@
+import sys
 from typing import List, Tuple, Any, Iterator
 
 import datasets
@@ -23,7 +24,7 @@ class DatasetGenerator:
         summaries = dataset['highlights']
 
         tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
-        for text, summary in tqdm.tqdm(zip(texts, summaries), total=len(texts)):
+        for text, summary in tqdm.tqdm(zip(texts, summaries), total=len(texts), file=sys.stdout):
             text_tokens = tokenizer(text)
             summary_tokens = tokenizer(summary)
             yield text_tokens, summary_tokens

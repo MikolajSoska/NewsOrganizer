@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 import tqdm
 
@@ -22,7 +23,7 @@ def main(news_api_key: str):
     for country in connector.get_countries():
         print(f'Adding news articles for {country.name}...')
         articles = news_getter.get_articles(country)
-        for article in tqdm.tqdm(articles, desc='Processing articles and adding to database'):
+        for article in tqdm.tqdm(articles, desc='Processing articles and adding to database', file=sys.stdout):
             article = predictor.process_article(article)
             connector.add_new_article(article)
         print(f'Added {len(articles)} new articles.')
