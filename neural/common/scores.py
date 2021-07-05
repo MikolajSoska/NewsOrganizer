@@ -1,14 +1,14 @@
+from abc import ABC, abstractmethod
 from typing import Any
 
 import sklearn.metrics as metrics
 import torch
-import torch.nn as nn
 from rouge_score import rouge_scorer
 from torch import Tensor
 from torchtext.vocab import Vocab
 
 
-class Score:
+class ScoreValue:
     def __init__(self, **kwargs: Any):
         for name, value in kwargs.items():
             self.__dict__[name] = value
@@ -21,31 +21,38 @@ class Score:
         return self.__str__()
 
 
-class Accuracy(nn.Module):
-    @staticmethod
-    def forward(predictions: Tensor, target: Tensor) -> float:
+class Scorer(ABC):
+    @abstractmethod
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
+        pass
+
+
+class Accuracy(Scorer):
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
-        return metrics.accuracy_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()))
+        accuracy = metrics.accuracy_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()))
+        return ScoreValue(accuracy=accuracy)
 
 
-class F1Score(nn.Module):
+class F1Score(Scorer):
     def __init__(self, average: str):
         super().__init__()
         self.average = average
 
-    def forward(self, predictions: Tensor, target: Tensor) -> float:
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
-        return metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average)
+        f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average)
+        return ScoreValue(f1=f1_score)
 
 
-class RougeScore(nn.Module):
+class RougeScore(Scorer):
     def __init__(self, vocab: Vocab, *score_types: str):
         super().__init__()
         self.vocab = vocab
         self.score_types = score_types
         self.scorer = rouge_scorer.RougeScorer(score_types, use_stemmer=False)
 
-    def forward(self, predictions: Tensor, target: Tensor) -> Score:
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
         scores = dict.fromkeys(self.score_types, 0)
         batch_size = labels.shape[1]
@@ -56,4 +63,4 @@ class RougeScore(nn.Module):
             for name, value in rouge.items():
                 scores[name] += value.fmeasure
 
-        return Score(**{name: value / batch_size for name, value in scores.items()})
+        return ScoreValue(**{name: value / batch_size for name, value in scores.items()})
