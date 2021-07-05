@@ -1,7 +1,21 @@
+from typing import Any
+
 import sklearn.metrics as metrics
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+
+class Score:
+    def __init__(self, **kwargs: Any):
+        for name, value in kwargs.items():
+            self.__dict__[name] = value
+
+    def __str__(self) -> str:
+        return ', '.join({f'{name}: {value}' for name, value in self.__dict__.items()})
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Accuracy(nn.Module):
