@@ -3,6 +3,7 @@ from typing import Any
 
 import sklearn.metrics as metrics
 import torch
+from nltk.translate import meteor_score
 from rouge_score import rouge_scorer
 from torch import Tensor
 from torchtext.vocab import Vocab
@@ -45,7 +46,7 @@ class F1Score(Scorer):
         return ScoreValue(f1=f1_score)
 
 
-class RougeScore(Scorer):
+class ROUGE(Scorer):
     def __init__(self, vocab: Vocab, *score_types: str):
         super().__init__()
         self.vocab = vocab
@@ -64,3 +65,20 @@ class RougeScore(Scorer):
                 scores[name] += value.fmeasure
 
         return ScoreValue(**{name: value / batch_size for name, value in scores.items()})
+
+
+class METEOR(Scorer):  # TODO add exact match METEOR
+    def __init__(self, vocab: Vocab):
+        self.vocab = vocab
+
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
+        labels = torch.argmax(predictions, dim=-1)
+        batch_size = labels.shape[1]
+        meteor = 0
+        for i in range(batch_size):
+            hypothesis = ' '.join(self.vocab.itos[token] for token in labels[:, i] if token != 0)
+            reference = ' '.join(self.vocab.itos[token] for token in target[:, i] if token != 0)
+            meteor += meteor_score.single_meteor_score(reference, hypothesis)
+
+        meteor = meteor / batch_size
+        return ScoreValue(meteor=meteor)
