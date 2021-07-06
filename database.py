@@ -46,12 +46,12 @@ class DatabaseConnector(metaclass=Singleton):
             self.__database.commit()
 
     def __get_tag_id(self, tag: str) -> int:
-        query = 'SELECT id FROM tags WHERE name = %s'
+        query = 'SELECT id FROM tags WHERE tag_short = %s'
         self.__cursor.execute(query, (tag,))
         tag_id = self.__cursor.fetchone()
-        if tag_id is None:
-            query = 'INSERT INTO tags VALUES (0, %s)'
-            self.__cursor.execute(query, (tag,))
+        if tag_id is None:  # TODO: to chyba trzeba usunąć bo wszystkie tagi są dodane wcześniej
+            query = 'INSERT INTO tags VALUES (0, %s, %s)'
+            self.__cursor.execute(query, (tag, tag))
             self.__database.commit()
             return self.__cursor.lastrowid
         else:
@@ -79,7 +79,7 @@ class DatabaseConnector(metaclass=Singleton):
         return NewsSite(name, code, Country('United States', 'us', 'en'))
 
     def __get_named_entities(self, article_id: int) -> List[Tuple[int, str]]:
-        query = 'SELECT position, name FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
+        query = 'SELECT position, tag_short FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
                 'WHERE article_id = %s'
         self.__cursor.execute(query, (article_id,))
         return self.__cursor.fetchall()

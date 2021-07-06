@@ -35,8 +35,9 @@ CREATE TABLE `news_articles`
 
 CREATE TABLE `tags`
 (
-    `id`   int PRIMARY KEY AUTO_INCREMENT,
-    `name` varchar(255) UNIQUE NOT NULL
+    `id`        int PRIMARY KEY AUTO_INCREMENT,
+    `tag_short` varchar(255) UNIQUE NOT NULL,
+    `fullname`  varchar(255) UNIQUE NOT NULL
 );
 
 CREATE TABLE `article_tag_map`
