@@ -12,7 +12,8 @@ word_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
 
 @app.route('/news', methods=['GET'])
 def get_articles():
-    return flask.render_template('news.html', articles=articles)
+    tags_count = connector.get_article_tags_count()
+    return flask.render_template('news.html', articles=articles, tags_count=tags_count)
 
 
 @app.route('/article/<article_index>', methods=['GET'])

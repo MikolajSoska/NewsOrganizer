@@ -4,17 +4,41 @@
     <meta charset="UTF-8">
     <title>NewsOrganizer</title>
 </head>
-<body>
-<div>
-    {% for article in articles %}
-    <a href=http://localhost:5001/article/{{ loop.index }}><h4>{{ article.title }}</h4></a>
-    <p>{{ article.article_date }}, {{ article.news_site.name }}</p>
-    <div>
-        <img src={{ article.image_url }} height="100px" width="auto">
-        <p><strong>Summary:</strong>{{ article.summary }}</p>
-    </div>
-    {% endfor %}
-</div>
+<style>
+    .content {
+        display: flex;
+    }
 
+    .articles {
+        flex: 80%;
+    }
+
+    .tags {
+        flex: 20%;
+    }
+</style>
+<body>
+<div class="content">
+    <div class="tags">
+        {% for tag, counter in tags_count.items() %}
+        <strong>{{ tag }}</strong>
+        <ul>
+            {% for token, count in counter.most_common() %}
+            <li>{{ token }} ({{ count }})</li>
+            {% endfor %}
+        </ul>
+        {% endfor %}
+    </div>
+    <div class="articles">
+        {% for article in articles %}
+        <a href=http://localhost:5001/article/{{ loop.index }}><h4>{{ article.title }}</h4></a>
+        <p>{{ article.article_date }}, {{ article.news_site.name }}</p>
+        <div>
+            <img src={{ article.image_url }} height="100px" width="auto">
+            <p><strong>Summary:</strong>{{ article.summary }}</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
 </body>
 </html>
