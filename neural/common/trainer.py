@@ -16,14 +16,15 @@ from torch import Tensor
 from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
+from neural.common.scores import Scorer, ScoreValue
 from utils.general import convert_bytes_to_megabytes
 
 
 class Trainer:
-    def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tensor], epochs: int, batch_size: int,
-                 max_gradient_norm: Optional[int], save_path: str, model_name: str, use_cuda: bool,
-                 load_checkpoint: bool, verbosity: int = 50, save_interval: int = 50, max_model_backup: int = 3,
-                 **params: Any):
+    def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tuple[Tensor, ScoreValue]], epochs: int,
+                 batch_size: int, max_gradient_norm: Optional[int], save_path: str, model_name: str, use_cuda: bool,
+                 load_checkpoint: bool, max_model_backup: int = 3, scores: List[Scorer] = None,
+                 validation_scores: List[Scorer] = None, test_scores: List[Scorer] = None, **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
@@ -35,13 +36,15 @@ class Trainer:
         self.model_name = model_name
         self.device = self.__get_device(use_cuda)
         self.load_checkpoint = load_checkpoint
-        self.verbosity = verbosity
-        self.save_interval = save_interval
         self.max_model_backup = max_model_backup
+        self.train_scores = scores
+        self.validation_scores = validation_scores or scores
+        self.test_scores = test_scores or validation_scores or scores
         self.params = DotMap(params)
 
         self.current_epoch = 0
         self.current_iteration = 0
+        self.current_phase = 'train'
 
     def set_models(self, **model: nn.Module) -> None:
         self.model = DotMap(model)
@@ -52,13 +55,14 @@ class Trainer:
     def set_optimizer(self, **optimizer: Optimizer) -> None:
         self.optimizer = DotMap(optimizer)
 
-    def train(self, train_loader: DataLoader, validation_loader: DataLoader = None) -> None:
+    def train(self, train_loader: DataLoader, validation_loader: DataLoader = None, verbosity: int = 50,
+              save_interval: int = 50) -> None:
         self.__check_initialization()
         self.save_path.mkdir(parents=True, exist_ok=True)
         oom_occurred = False
 
         try:
-            self.__train(train_loader, validation_loader)
+            self.__train(train_loader, validation_loader, verbosity, save_interval)
         except RuntimeError as error:
             if 'CUDA out of memory' in str(error):
                 print(f'Caught OOM exception: {error}. Restarting training from most recent checkpoint.')
@@ -70,9 +74,27 @@ class Trainer:
             torch.cuda.empty_cache()
             gc.collect()
             self.load_checkpoint = True  # Restart from checkpoint
-            self.train(train_loader, validation_loader)
+            self.train(train_loader, validation_loader, verbosity, save_interval)
 
-    def __train(self, train_loader: DataLoader, validation_loader: Optional[DataLoader]) -> None:
+    def score(self, predictions: Tensor, targets: Tensor) -> ScoreValue:
+        if self.current_phase == 'train':
+            scorers = self.train_scores
+        elif self.current_phase == 'validation':
+            scorers = self.validation_scores
+        elif self.current_phase == 'test':
+            scorers = self.test_scores
+        else:
+            raise ValueError(f'Invalid current phase: {self.current_phase}')
+
+        score = ScoreValue()
+        if scorers is not None:
+            for scorer in scorers:
+                score += scorer.score(predictions, targets)
+
+        return score
+
+    def __train(self, train_loader: DataLoader, validation_loader: Optional[DataLoader], verbosity: int,
+                save_interval: int) -> None:
         if self.load_checkpoint:
             iteration, epoch_start = self.__load_checkpoint(len(train_loader))
         else:
@@ -87,19 +109,24 @@ class Trainer:
             optimizer.load_state_dict(optimizer.state_dict())
 
         self.current_iteration = (epoch_start + 1) * iteration
+        score = ScoreValue()
         running_loss = []
         memory_usage = []
 
         for epoch in range(epoch_start, self.epochs):
+            self.current_phase = 'train'
             self.current_epoch = epoch
-            self.__train_epoch(train_loader, running_loss, memory_usage, epoch, iteration)
+            score = self.__train_epoch(train_loader, running_loss, memory_usage, score, epoch, iteration, verbosity,
+                                       save_interval)
             print(f'Finished training epoch {epoch}.')
             if validation_loader is not None:
+                self.current_phase = 'validation'
                 self.__validate_epoch(validation_loader)
             iteration = 0
 
-    def __train_epoch(self, train_loader: DataLoader, running_loss: List[float], memory_usage: List[float], epoch: int,
-                      from_iteration: int) -> None:
+    def __train_epoch(self, train_loader: DataLoader, running_loss: List[float], memory_usage: List[float],
+                      running_score: ScoreValue, epoch: int, from_iteration: int, verbosity: int,
+                      save_interval: int) -> ScoreValue:
         time_start = time.time()
         train_length = len(train_loader)
         gc.collect()
@@ -111,7 +138,8 @@ class Trainer:
                 optimizer.zero_grad(set_to_none=True)
 
             inputs = self.__convert_input_to_device(inputs)
-            loss = self.train_step(self, inputs)
+            loss, score = self.train_step(self, inputs)
+            running_score += score
             loss.backward()
             self.__clip_gradients()
 
@@ -124,32 +152,39 @@ class Trainer:
                 memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
             self.current_iteration += self.batch_size
 
-            if (self.current_iteration // self.batch_size) % self.save_interval == 0:
+            if (self.current_iteration // self.batch_size) % save_interval == 0:
                 self.__save_checkpoint(epoch, i + 1)
 
-            if (self.current_iteration // self.batch_size) % self.verbosity == 0:
-                self.__log_progress(running_loss, memory_usage, time_start, epoch, i, train_length)
+            if (self.current_iteration // self.batch_size) % verbosity == 0:
+                self.__log_progress(running_loss, memory_usage, running_score, time_start, epoch, i, train_length)
                 time_start = time.time()
                 running_loss.clear()
                 memory_usage.clear()
+                running_score = ScoreValue()
+
+        return running_score
 
     def __validate_epoch(self, validation_loader: DataLoader) -> None:
         print('Starting validation phase...')
         time_start = time.time()
         validation_length = len(validation_loader)
         running_loss = []
+        running_score = ScoreValue()
         gc.collect()
 
-        with torch.no_grad():
+        with torch.no_grad():  # TODO add model.eval() (aktualnie wywala jakiś błąd pamięci CUDA przy użyciu eval
             for inputs in tqdm.tqdm(validation_loader, file=sys.stdout):
                 inputs = self.__convert_input_to_device(inputs)
-                loss = self.train_step(self, inputs)
+                loss, score = self.train_step(self, inputs)
 
                 running_loss.append(loss.item())
+                running_score += score
+
                 del loss
 
         print('Validation result: ', end='')
-        self.__log_progress(running_loss, [], time_start, self.current_epoch, validation_length, validation_length)
+        self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, validation_length,
+                            validation_length)
 
     def __clip_gradients(self) -> None:
         if self.max_gradient_norm is not None:
@@ -244,13 +279,18 @@ class Trainer:
         return tuple(inputs_in_device)
 
     @staticmethod
-    def __log_progress(running_loss: List[float], memory_usage: List[float], time_start: float, epoch: int,
-                       iteration: int, iteration_max: int) -> None:
+    def __log_progress(running_loss: List[float], memory_usage: List[float], running_score: ScoreValue,
+                       time_start: float, epoch: int, iteration: int, iteration_max: int) -> None:
         torch.cuda.empty_cache()
         average_loss = sum(running_loss) / len(running_loss)
+        score = running_score / len(running_loss)
         time_iter = round(time.time() - time_start, 2)
-        status_message = f'Epoch: {epoch} Iter: {iteration}/{iteration_max} Loss: {average_loss}, ' \
-                         f'Time: {time_iter} seconds'
+        status_message = f'Epoch: {epoch} Iter: {iteration}/{iteration_max}, Time: {time_iter} seconds, ' \
+                         f'Loss: {average_loss}'
+
+        if len(score) > 0:
+            status_message = f'{status_message}, {score}'
+
         if len(memory_usage) > 0:
             memory = round(sum(memory_usage) / len(memory_usage), 2)
             status_message = f'{status_message}, Average memory use: {memory} MB'

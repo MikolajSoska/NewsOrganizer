@@ -1,11 +1,14 @@
 import argparse
-from typing import Tuple, Any
+from typing import List, Tuple, Any
 
 import torch
 from torch import Tensor
+from torchtext.vocab import Vocab
 
+import neural.common.scores as scores
 import neural.summarization.dataloader as dataloader
 from neural.common.losses import SummarizationLoss, CoverageLoss
+from neural.common.scores import ScoreValue
 from neural.common.trainer import Trainer
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
@@ -30,25 +33,47 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def train_step(train: Trainer, inputs: Tuple[Any, ...]) -> Tensor:
+def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, ScoreValue]:
     texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list = inputs
-    model = train.model.pointer_generator
+    model = trainer.model.pointer_generator
 
-    if train.current_iteration >= train.params.iterations_without_coverage and not model.with_coverage:
-        print(f'Iteration {train.current_iteration // train.batch_size}. Activated coverage mechanism.')
+    if trainer.current_phase == 'test' or (trainer.current_phase == 'train' and trainer.current_iteration >=
+                                           trainer.params.iterations_without_coverage and not model.with_coverage):
+        print(f'Iteration {trainer.current_iteration // trainer.batch_size}. Activated coverage mechanism.')
         model.activate_coverage()
 
     oov_size = len(max(oov_list, key=lambda x: len(x)))
     output, attention, coverage = model(texts, texts_lengths, texts_extended, oov_size, summaries)
-    loss = train.criterion.summarization(output, targets, summaries_lengths)
+    loss = trainer.criterion.summarization(output, targets, summaries_lengths)
     if coverage is not None:
-        loss = loss + train.criterion.coverage(attention, coverage, targets)
+        loss = loss + trainer.criterion.coverage(attention, coverage, targets)
+
+    batch_size = targets.shape[1]
+    score = ScoreValue()
+    for i in range(batch_size):  # Due to different OOV words for each sequence in a batch, it has to scored separately
+        add_words_to_vocab(trainer.params.vocab, oov_list[i])
+        score_out = output[:, i, :].unsqueeze(dim=1)
+        score_target = targets[:, i].unsqueeze(dim=1)
+        score += trainer.score(score_out, score_target)
+        remove_words_from_vocab(trainer.params.vocab, oov_list[i])
 
     del output
     del attention
     del coverage
 
-    return loss
+    return loss, score
+
+
+def add_words_to_vocab(vocab: Vocab, words: List[str]) -> None:
+    for word in words:
+        vocab.itos.append(word)
+        vocab.stoi[word] = len(vocab.itos)
+
+
+def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
+    for word in words:
+        del vocab.itos[-1]
+        del vocab.stoi[word]
 
 
 def main():
@@ -74,6 +99,8 @@ def main():
     bos_index = vocab.stoi[dataloader.SpecialTokens.BOS]
     model = PointerGeneratorNetwork(args.vocab_size + len(dataloader.SpecialTokens), bos_index)
     iterations_without_coverage = len(train_dataset) - args.coverage
+    rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
+    meteor = scores.METEOR(vocab)
 
     trainer = Trainer(
         train_step=train_step,
@@ -84,7 +111,10 @@ def main():
         model_name='summarization-model',
         use_cuda=args.use_gpu,
         load_checkpoint=args.load_checkpoint,
-        iterations_without_coverage=iterations_without_coverage
+        validation_scores=[rouge],
+        test_scores=[rouge, meteor],
+        iterations_without_coverage=iterations_without_coverage,
+        vocab=vocab
     )
     trainer.set_models(
         pointer_generator=model

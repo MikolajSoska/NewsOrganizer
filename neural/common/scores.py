@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any
+from collections import Counter
+from typing import Any, Union
 
 import sklearn.metrics as metrics
 import torch
@@ -21,6 +24,19 @@ class ScoreValue:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def __add__(self, score: ScoreValue) -> ScoreValue:
+        if not isinstance(score, ScoreValue):
+            return NotImplemented
+
+        return ScoreValue(**(Counter(self.__dict__) + Counter(score.__dict__)))
+
+    def __truediv__(self, number: Union[int, float]) -> ScoreValue:
+        new_scores = {score: value / number for score, value in self.__dict__.items()}
+        return ScoreValue(**new_scores)
+
+    def __len__(self) -> int:
+        return len(self.__dict__)
+
 
 class Scorer(ABC):
     @abstractmethod
@@ -32,7 +48,7 @@ class Accuracy(Scorer):
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
         accuracy = metrics.accuracy_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()))
-        return ScoreValue(accuracy=accuracy)
+        return ScoreValue(Accuracy=accuracy)
 
 
 class F1Score(Scorer):
@@ -43,7 +59,7 @@ class F1Score(Scorer):
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
         f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average)
-        return ScoreValue(f1=f1_score)
+        return ScoreValue(F1=f1_score)
 
 
 class ROUGE(Scorer):
@@ -64,7 +80,8 @@ class ROUGE(Scorer):
             for name, value in rouge.items():
                 scores[name] += value.fmeasure
 
-        return ScoreValue(**{name: value / batch_size for name, value in scores.items()})
+        scores = {f"ROUGE-{name.replace('rouge', '')}": value / batch_size for name, value in scores.items()}
+        return ScoreValue(**scores)
 
 
 class METEOR(Scorer):  # TODO add exact match METEOR
@@ -81,4 +98,4 @@ class METEOR(Scorer):  # TODO add exact match METEOR
             meteor += meteor_score.single_meteor_score(reference, hypothesis)
 
         meteor = meteor / batch_size
-        return ScoreValue(meteor=meteor)
+        return ScoreValue(METEOR=meteor)
