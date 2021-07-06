@@ -1,4 +1,5 @@
-from typing import List, Tuple
+from collections import Counter
+from typing import List, Tuple, Dict
 
 import mysql.connector as mysql
 
@@ -29,7 +30,7 @@ class DatabaseConnector(metaclass=Singleton):
 
         return [NewsSite(name, code, country) for name, code in self.__cursor.fetchall()]
 
-    def add_new_article(self, article: NewsArticle) -> None:
+    def add_new_article(self, article: NewsArticle, tokens: List[str]) -> None:
         query = 'SELECT id FROM news_sites WHERE code = %s'
         self.__cursor.execute(query, (article.news_site.code,))
         site_id = self.__cursor.fetchone()[0]
@@ -41,8 +42,9 @@ class DatabaseConnector(metaclass=Singleton):
         article_id = self.__cursor.lastrowid
         for position, tag in article.named_entities.items():
             tag_id = self.__get_tag_id(tag)
-            query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s)'
-            self.__cursor.execute(query, (article_id, tag_id, position))
+            word = tokens[position]
+            query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s, %s)'
+            self.__cursor.execute(query, (article_id, tag_id, word, position))
             self.__database.commit()
 
     def __get_tag_id(self, tag: str) -> int:
@@ -57,6 +59,7 @@ class DatabaseConnector(metaclass=Singleton):
         else:
             return tag_id[0]
 
+    # TODO refactor (chodzi o te data)
     def get_articles(self) -> List[NewsArticle]:
         query = 'SELECT * FROM news_articles'
         self.__cursor.execute(query)
@@ -69,6 +72,24 @@ class DatabaseConnector(metaclass=Singleton):
             articles.append(article)
 
         return articles
+
+    def get_article_tags_count(self) -> Dict[str, Counter]:
+        query = 'SELECT DISTINCT article_id, word FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
+                'WHERE fullname = %s'
+        tag_names = self.__get_tag_names()
+        tag_counts = {}
+        for tag in tag_names:
+            self.__cursor.execute(query, (tag,))
+            words = [word for _, word in self.__cursor.fetchall()]
+            tag_counts[tag] = Counter(words)
+
+        return tag_counts
+
+    def __get_tag_names(self) -> List[str]:
+        query = 'SELECT fullname FROM tags'
+
+        self.__cursor.execute(query)
+        return [name[0] for name in self.__cursor.fetchall()]
 
     def __get_news_site(self, site_id: int) -> NewsSite:
         query = 'SELECT news_sites.name, news_sites.code FROM news_sites INNER JOIN countries ON ' \

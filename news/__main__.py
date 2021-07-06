@@ -2,10 +2,12 @@ import argparse
 import sys
 
 import tqdm
+from torchtext.data.utils import get_tokenizer
 
 from database import DatabaseConnector
 from neural.predict import NewsPredictor
 from news.getter import NewsGetter
+from utils.general import tokenize_text_content
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,13 +21,15 @@ def main(news_api_key: str):
     connector = DatabaseConnector()
     news_getter = NewsGetter(news_api_key)
     predictor = NewsPredictor(use_cuda=True)
+    word_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
 
     for country in connector.get_countries():
         print(f'Adding news articles for {country.name}...')
         articles = news_getter.get_articles(country)
         for article in tqdm.tqdm(articles, desc='Processing articles and adding to database', file=sys.stdout):
             article = predictor.process_article(article)
-            connector.add_new_article(article)
+            tokens = tokenize_text_content(article.content, word_tokenizer=word_tokenizer)
+            connector.add_new_article(article, tokens)
         print(f'Added {len(articles)} new articles.')
 
 

@@ -43,9 +43,10 @@ CREATE TABLE `tags`
 CREATE TABLE `article_tag_map`
 (
     `id`         int PRIMARY KEY AUTO_INCREMENT,
-    `article_id` int NOT NULL,
-    `tag_id`     int NOT NULL,
-    `position`   int NOT NULL
+    `article_id` int          NOT NULL,
+    `tag_id`     int          NOT NULL,
+    `word`       varchar(255) NOT NULL,
+    `position`   int          NOT NULL
 );
 
 ALTER TABLE `countries`
