@@ -48,6 +48,8 @@ class Trainer:
 
     def set_models(self, **model: nn.Module) -> None:
         self.model = DotMap(model)
+        for name, model in self.model.items():
+            self.model.name = model.to(self.device)
 
     def set_criterion(self, **criterion: nn.Module) -> None:
         self.criterion = DotMap(criterion)
@@ -76,6 +78,14 @@ class Trainer:
             self.load_checkpoint = True  # Restart from checkpoint
             self.train(train_loader, validation_loader, verbosity, save_interval)
 
+    def eval(self, test_loader: DataLoader) -> None:
+        self.__check_initialization()
+        self.save_path.mkdir(parents=True, exist_ok=True)
+
+        print('Starting test phase...')
+        self.current_phase = 'test'
+        self.__validate_model(test_loader)
+
     def score(self, predictions: Tensor, targets: Tensor) -> ScoreValue:
         if self.current_phase == 'train':
             scorers = self.train_scores
@@ -102,7 +112,6 @@ class Trainer:
             epoch_start = 0
 
         for name, model in self.model.items():
-            self.model.name = model.to(self.device)
             model.train()
 
         for optimizer in self.optimizer.values():  # Reload optimizer to get correct model device
@@ -121,8 +130,9 @@ class Trainer:
             self.__save_model_checkpoint(Path(f'{self.model_name}-epoch-{epoch}.pt'))
             print(f'Finished training epoch {epoch}.')
             if validation_loader is not None:
+                print('Starting validation phase...')
                 self.current_phase = 'validation'
-                self.__validate_epoch(validation_loader)
+                self.__validate_model(validation_loader)
             iteration = 0
 
         self.__save_model_checkpoint()
@@ -167,16 +177,15 @@ class Trainer:
 
         return running_score
 
-    def __validate_epoch(self, validation_loader: DataLoader) -> None:
-        print('Starting validation phase...')
+    def __validate_model(self, data_loader: DataLoader) -> None:
         time_start = time.time()
-        validation_length = len(validation_loader)
+        data_length = len(data_loader)
         running_loss = []
         running_score = ScoreValue()
         gc.collect()
 
         with torch.no_grad():  # TODO add model.eval() (aktualnie wywala jakiś błąd pamięci CUDA przy użyciu eval
-            for inputs in tqdm.tqdm(validation_loader, file=sys.stdout):
+            for inputs in tqdm.tqdm(data_loader, file=sys.stdout):
                 inputs = self.__convert_input_to_device(inputs)
                 loss, score = self.train_step(self, inputs)
 
@@ -185,9 +194,8 @@ class Trainer:
 
                 del loss
 
-        print('Validation result: ', end='')
-        self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, validation_length,
-                            validation_length)
+        print('Result: ', end='')
+        self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, data_length, data_length)
 
     def __clip_gradients(self) -> None:
         if self.max_gradient_norm is not None:
@@ -218,7 +226,7 @@ class Trainer:
             raise AttributeError('Models are not initialized.')
         if self.criterion is None:
             raise AttributeError('Criteria are not initialized.')
-        if self.optimizer is None:
+        if self.optimizer is None and self.current_phase == 'train':
             raise AttributeError('Optimizers are not initialized.')
 
     def __load_checkpoint(self, iteration_number: int) -> Tuple[int, int]:

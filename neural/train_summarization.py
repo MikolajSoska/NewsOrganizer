@@ -37,8 +37,9 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list = inputs
     model = trainer.model.pointer_generator
 
-    if trainer.current_phase == 'test' or (trainer.current_phase == 'train' and trainer.current_iteration >=
-                                           trainer.params.iterations_without_coverage and not model.with_coverage):
+    if not model.with_coverage and (trainer.current_phase == 'test' or (trainer.current_phase == 'train' and
+                                                                        trainer.current_iteration >=
+                                                                        trainer.params.iterations_without_coverage)):
         print(f'Iteration {trainer.current_iteration // trainer.batch_size}. Activated coverage mechanism.')
         model.activate_coverage()
 
@@ -127,6 +128,7 @@ def main():
         adagrad=torch.optim.Adagrad(model.parameters(), lr=args.lr, initial_accumulator_value=args.init_acc_value)
     )
     trainer.train(train_loader, validation_loader)
+    trainer.eval(test_loader)
 
 
 if __name__ == '__main__':
