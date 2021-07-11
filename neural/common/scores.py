@@ -11,6 +11,8 @@ from rouge_score import rouge_scorer
 from torch import Tensor
 from torchtext.vocab import Vocab
 
+from utils.general import tensor_to_string
+
 
 class ScoreValue:
     def __init__(self, **kwargs: Any):
@@ -74,8 +76,8 @@ class ROUGE(Scorer):
         scores = dict.fromkeys(self.score_types, 0)
         batch_size = labels.shape[1]
         for i in range(batch_size):
-            hypothesis = ' '.join(self.vocab.itos[token] for token in labels[:, i] if token != 0)
-            reference = ' '.join(self.vocab.itos[token] for token in target[:, i] if token != 0)
+            hypothesis = tensor_to_string(self.vocab, labels[:, i])
+            reference = tensor_to_string(self.vocab, target[:, i])
             rouge = self.scorer.score(hypothesis, reference)
             for name, value in rouge.items():
                 scores[name] += value.fmeasure
@@ -93,8 +95,8 @@ class METEOR(Scorer):  # TODO add exact match METEOR
         batch_size = labels.shape[1]
         meteor = 0
         for i in range(batch_size):
-            hypothesis = ' '.join(self.vocab.itos[token] for token in labels[:, i] if token != 0)
-            reference = ' '.join(self.vocab.itos[token] for token in target[:, i] if token != 0)
+            hypothesis = tensor_to_string(self.vocab, labels[:, i])
+            reference = tensor_to_string(self.vocab, target[:, i])
             meteor += meteor_score.single_meteor_score(reference, hypothesis)
 
         meteor = meteor / batch_size

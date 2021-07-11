@@ -4,6 +4,8 @@ from typing import List, Callable
 import numpy as np
 import torch
 from nltk.tokenize import sent_tokenize, word_tokenize
+from torch import Tensor
+from torchtext.vocab import Vocab
 
 
 def set_random_seed(seed: int) -> None:
@@ -28,3 +30,16 @@ def tokenize_text_content(text: str, word_tokenizer: Callable = None, sentence_t
             content.append(word)
 
     return content
+
+
+def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
+    tokens = []
+    for token_id in tensor:
+        if token_id != 0:
+            try:  # Try-catch is much faster in this case than if-else
+                token = vocab.itos[token_id]
+            except IndexError:
+                token = vocab.UNK
+            tokens.append(token)
+
+    return ' '.join(tokens)
