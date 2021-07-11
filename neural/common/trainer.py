@@ -6,7 +6,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import List, Tuple, Callable, Optional, Any
+from typing import List, Tuple, Dict, Callable, Optional, Any
 
 import torch
 import torch.nn as nn
@@ -118,11 +118,14 @@ class Trainer:
             self.current_epoch = epoch
             score = self.__train_epoch(train_loader, running_loss, memory_usage, score, epoch, iteration, verbosity,
                                        save_interval)
+            self.__save_model_checkpoint(Path(f'{self.model_name}-epoch-{epoch}.pt'))
             print(f'Finished training epoch {epoch}.')
             if validation_loader is not None:
                 self.current_phase = 'validation'
                 self.__validate_epoch(validation_loader)
             iteration = 0
+
+        self.__save_model_checkpoint()
 
     def __train_epoch(self, train_loader: DataLoader, running_loss: List[float], memory_usage: List[float],
                       running_score: ScoreValue, epoch: int, from_iteration: int, verbosity: int,
@@ -153,7 +156,7 @@ class Trainer:
             self.current_iteration += self.batch_size
 
             if (self.current_iteration // self.batch_size) % save_interval == 0:
-                self.__save_checkpoint(epoch, i + 1)
+                self.__save_full_checkpoint(epoch, i + 1)
 
             if (self.current_iteration // self.batch_size) % verbosity == 0:
                 self.__log_progress(running_loss, memory_usage, running_score, time_start, epoch, i, train_length)
@@ -240,12 +243,23 @@ class Trainer:
 
         return iteration, epoch_start
 
-    def __save_checkpoint(self, epoch: int, iteration: int) -> None:
+    def __save_full_checkpoint(self, epoch: int, iteration: int) -> None:
         checkpoint = {
             'epoch': epoch,
             'iteration': iteration,
             'batch_size': self.batch_size,
         }
+
+        checkpoint_name = Path(f'{self.model_name}-e{epoch}i{iteration * self.batch_size}.pt')
+        self.__save_model_checkpoint(checkpoint_name, checkpoint)
+        self.__remove_old_checkpoints()
+
+    def __save_model_checkpoint(self, checkpoint_name: Path = None, checkpoint: Dict[str, Any] = None):
+        if checkpoint_name is None:
+            checkpoint_name = Path(f'{self.model_name}.pt')
+
+        if checkpoint is None:
+            checkpoint = {}
 
         for name, model in self.model.items():
             checkpoint[f'{name}_state_dict'] = model.state_dict()
@@ -253,9 +267,7 @@ class Trainer:
         for name, optimizer in self.optimizer.items():
             checkpoint[f'{name}-optimizer_state_dict'] = optimizer.state_dict()
 
-        checkpoint_name = Path(f'{self.model_name}-e{epoch}i{iteration * self.batch_size}.pt')
         torch.save(checkpoint, self.save_path / checkpoint_name)
-        self.__remove_old_checkpoints()
 
     def __get_checkpoint_list(self) -> List[str]:
         name_pattern = re.compile(rf'^{self.model_name}-e\d+i\d+\.pt$')
