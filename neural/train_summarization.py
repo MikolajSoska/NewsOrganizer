@@ -40,7 +40,8 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     if not model.with_coverage and (trainer.current_phase == 'test' or (trainer.current_phase == 'train' and
                                                                         trainer.current_iteration >=
                                                                         trainer.params.iterations_without_coverage)):
-        print(f'Iteration {trainer.current_iteration // trainer.batch_size}. Activated coverage mechanism.')
+        trainer.logger.info(f'Iteration {trainer.current_iteration // trainer.batch_size}.'
+                            f' Activated coverage mechanism.')
         model.activate_coverage()
 
     oov_size = len(max(oov_list, key=lambda x: len(x)))
@@ -108,7 +109,7 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch,
         max_gradient_norm=args.max_gradient_norm,
-        save_path='../data/weights',
+        save_path='../data',
         model_name='summarization-model',
         use_cuda=args.use_gpu,
         load_checkpoint=args.load_checkpoint,

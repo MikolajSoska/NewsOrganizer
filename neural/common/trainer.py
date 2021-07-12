@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 import os
 import re
 import sys
@@ -22,8 +23,8 @@ from utils.general import convert_bytes_to_megabytes
 
 class Trainer:
     def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tuple[Tensor, ScoreValue]], epochs: int,
-                 batch_size: int, max_gradient_norm: Optional[int], save_path: str, model_name: str, use_cuda: bool,
-                 load_checkpoint: bool, max_model_backup: int = 3, scores: List[Scorer] = None,
+                 batch_size: int, max_gradient_norm: Optional[int], save_path: str, model_name: str,
+                 use_cuda: bool, load_checkpoint: bool, max_model_backup: int = 3, scores: List[Scorer] = None,
                  validation_scores: List[Scorer] = None, test_scores: List[Scorer] = None, **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
@@ -32,7 +33,9 @@ class Trainer:
         self.epochs = epochs
         self.batch_size = batch_size
         self.max_gradient_norm = max_gradient_norm
-        self.save_path = Path(save_path)
+        self.model_save_path = self.__get_save_dir(save_path, 'weights')
+        self.log_save_path = self.__get_save_dir(save_path, 'logs')
+        self.logger = self.__setup_logger()
         self.model_name = model_name
         self.device = self.__get_device(use_cuda)
         self.load_checkpoint = load_checkpoint
@@ -60,14 +63,13 @@ class Trainer:
     def train(self, train_loader: DataLoader, validation_loader: DataLoader = None, verbosity: int = 50,
               save_interval: int = 50) -> None:
         self.__check_initialization()
-        self.save_path.mkdir(parents=True, exist_ok=True)
         oom_occurred = False
 
         try:
             self.__train(train_loader, validation_loader, verbosity, save_interval)
         except RuntimeError as error:
             if 'CUDA out of memory' in str(error):
-                print(f'Caught OOM exception: {error}. Restarting training from most recent checkpoint.')
+                self.logger.error(f'Caught OOM exception: {error}. Restarting training from most recent checkpoint.')
                 oom_occurred = True
             else:
                 raise error
@@ -80,9 +82,9 @@ class Trainer:
 
     def eval(self, test_loader: DataLoader) -> None:
         self.__check_initialization()
-        self.save_path.mkdir(parents=True, exist_ok=True)
+        self.__setup_log_file_handler('eval')
 
-        print('Starting test phase...')
+        self.logger.info('Starting test phase...')
         self.current_phase = 'test'
         self.__validate_model(test_loader)
 
@@ -123,14 +125,15 @@ class Trainer:
         memory_usage = []
 
         for epoch in range(epoch_start, self.epochs):
+            self.__setup_log_file_handler(f'epoch-{epoch}')
             self.current_phase = 'train'
             self.current_epoch = epoch
             score = self.__train_epoch(train_loader, running_loss, memory_usage, score, epoch, iteration, verbosity,
                                        save_interval)
             self.__save_model_checkpoint(Path(f'{self.model_name}-epoch-{epoch}.pt'))
-            print(f'Finished training epoch {epoch}.')
+            self.logger.info(f'Finished training epoch {epoch}.')
             if validation_loader is not None:
-                print('Starting validation phase...')
+                self.logger.info('Starting validation phase...')
                 self.current_phase = 'validation'
                 self.__validate_model(validation_loader)
             iteration = 0
@@ -194,7 +197,7 @@ class Trainer:
 
                 del loss
 
-        print('Result: ', end='')
+        self.logger.info('Result:')
         self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, data_length, data_length)
 
     def __clip_gradients(self) -> None:
@@ -203,7 +206,33 @@ class Trainer:
                 nn.utils.clip_grad_norm_(model.parameters(), self.max_gradient_norm)
 
     @staticmethod
-    def __get_device(use_cuda: bool) -> torch.device:
+    def __get_save_dir(save_path: str, dir_name: str) -> Path:
+        path = Path(save_path) / dir_name
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @staticmethod
+    def __setup_logger() -> logging.Logger:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.INFO)
+
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setLevel(logging.INFO)
+        logger.addHandler(stream_handler)
+
+        return logger
+
+    def __setup_log_file_handler(self, file_label: str) -> None:
+        if len(self.logger.handlers) == 2:  # If file handler is already set up
+            self.logger.handlers.pop()
+
+        logfile = self.log_save_path / f'{self.model_name}-log-{file_label}.log'
+        file_handler = logging.FileHandler(logfile, mode='a')
+        file_handler.setLevel(logging.INFO)
+
+        self.logger.addHandler(file_handler)
+
+    def __get_device(self, use_cuda: bool) -> torch.device:
         if use_cuda:
             if torch.cuda.is_available():
                 device = torch.device('cuda')
@@ -211,14 +240,14 @@ class Trainer:
                 device_name = f'CUDA ({device_properties.name}), ' \
                               f'Total memory: {convert_bytes_to_megabytes(device_properties.total_memory):g} MB'
             else:
-                print('CUDA device is not available.')
+                self.logger.info('CUDA device is not available.')
                 device = torch.device('cpu')
                 device_name = 'CPU'
         else:
             device = torch.device('cpu')
             device_name = 'CPU'
 
-        print(f'Using device: {device_name}')
+        self.logger.info(f'Using device: {device_name}')
         return device
 
     def __check_initialization(self) -> None:
@@ -230,11 +259,11 @@ class Trainer:
             raise AttributeError('Optimizers are not initialized.')
 
     def __load_checkpoint(self, iteration_number: int) -> Tuple[int, int]:
-        print('Loading checkpoint...')
+        self.logger.info('Loading checkpoint...')
 
         checkpoints = self.__get_checkpoint_list()
         if len(checkpoints) > 0:
-            checkpoint = torch.load(self.save_path / Path(checkpoints[0]))
+            checkpoint = torch.load(self.model_save_path / Path(checkpoints[0]))
             for name, model in self.model.items():
                 model.load_state_dict(checkpoint[f'{name}_state_dict'])
             for name, optimizer in self.optimizer.items():
@@ -242,10 +271,11 @@ class Trainer:
             epoch_start = checkpoint['epoch']
             previous_batch_size = checkpoint['batch_size']
             iteration = checkpoint['iteration'] * previous_batch_size // self.batch_size
-            print(f'Epoch set to {epoch_start}. Iteration set to {iteration} of {iteration_number}.')
+            self.logger.info(f'Epoch set to {epoch_start}. Iteration set to {iteration} of {iteration_number}.')
             del checkpoint
         else:
-            print(f'Checkpoint for model {self.model_name} in {self.save_path} doesn\'t exist. Training from scratch.')
+            self.logger.info(f'Checkpoint for model {self.model_name} in {self.model_save_path} doesn\'t exist. '
+                             f'Training from scratch.')
             iteration = 0
             epoch_start = 0
 
@@ -275,19 +305,19 @@ class Trainer:
         for name, optimizer in self.optimizer.items():
             checkpoint[f'{name}-optimizer_state_dict'] = optimizer.state_dict()
 
-        torch.save(checkpoint, self.save_path / checkpoint_name)
+        torch.save(checkpoint, self.model_save_path / checkpoint_name)
 
     def __get_checkpoint_list(self) -> List[str]:
         name_pattern = re.compile(rf'^{self.model_name}-e\d+i\d+\.pt$')
-        return list(sorted(filter(name_pattern.match, os.listdir(self.save_path)), reverse=True))
+        return list(sorted(filter(name_pattern.match, os.listdir(self.model_save_path)), reverse=True))
 
     def __remove_old_checkpoints(self) -> None:
         checkpoints = self.__get_checkpoint_list()[self.max_model_backup:]
         for checkpoint in checkpoints:
             try:
-                (self.save_path / Path(checkpoint)).unlink()
+                (self.model_save_path / Path(checkpoint)).unlink()
             except PermissionError as error:
-                print(f'Can\'t remove old checkpoint {checkpoint}. Permission error: {error}.')
+                self.logger.error(f'Can\'t remove old checkpoint {checkpoint}. Permission error: {error}.')
 
     def __convert_input_to_device(self, inputs: Tuple[Any, ...]) -> Tuple[Any, ...]:
         inputs_in_device = []
@@ -298,8 +328,7 @@ class Trainer:
 
         return tuple(inputs_in_device)
 
-    @staticmethod
-    def __log_progress(running_loss: List[float], memory_usage: List[float], running_score: ScoreValue,
+    def __log_progress(self, running_loss: List[float], memory_usage: List[float], running_score: ScoreValue,
                        time_start: float, epoch: int, iteration: int, iteration_max: int) -> None:
         torch.cuda.empty_cache()
         average_loss = sum(running_loss) / len(running_loss)
@@ -315,4 +344,4 @@ class Trainer:
             memory = round(sum(memory_usage) / len(memory_usage), 2)
             status_message = f'{status_message}, Average memory use: {memory} MB'
 
-        print(status_message)
+        self.logger.info(status_message)
