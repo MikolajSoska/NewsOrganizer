@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import time
+from functools import cmp_to_key
 from pathlib import Path
 from typing import List, Tuple, Dict, Callable, Optional, Any
 
@@ -308,8 +309,18 @@ class Trainer:
         torch.save(checkpoint, self.model_save_path / checkpoint_name)
 
     def __get_checkpoint_list(self) -> List[str]:
+        def compare_checkpoints(checkpoint_1: str, checkpoint_2: str) -> int:
+            epochs_1, iterations_1 = re.findall(r'\d+', checkpoint_1)[-2:]
+            epochs_2, iterations_2 = re.findall(r'\d+', checkpoint_2)[-2:]
+
+            if epochs_1 == epochs_2:
+                return int(iterations_1) - int(iterations_2)
+            else:
+                return int(epochs_1) - int(epochs_2)
+
         name_pattern = re.compile(rf'^{self.model_name}-e\d+i\d+\.pt$')
-        return list(sorted(filter(name_pattern.match, os.listdir(self.model_save_path)), reverse=True))
+        return list(sorted(filter(name_pattern.match, os.listdir(self.model_save_path)), reverse=True,
+                           key=cmp_to_key(compare_checkpoints)))
 
     def __remove_old_checkpoints(self) -> None:
         checkpoints = self.__get_checkpoint_list()[self.max_model_backup:]
