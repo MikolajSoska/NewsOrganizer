@@ -100,7 +100,7 @@ def main():
 
     bos_index = vocab.stoi[dataloader.SpecialTokens.BOS]
     model = PointerGeneratorNetwork(args.vocab_size + len(dataloader.SpecialTokens), bos_index)
-    iterations_without_coverage = len(train_dataset) - args.coverage
+    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 
