@@ -63,7 +63,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     del attention
     del coverage
 
-    return loss, score
+    return loss, score / batch_size
 
 
 def add_words_to_vocab(vocab: Vocab, words: List[str]) -> None:
