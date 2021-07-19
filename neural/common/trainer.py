@@ -120,7 +120,7 @@ class Trainer:
         for optimizer in self.optimizer.values():  # Reload optimizer to get correct model device
             optimizer.load_state_dict(optimizer.state_dict())
 
-        self.current_iteration = (epoch_start + 1) * iteration
+        self.current_iteration = (epoch_start * len(train_loader) + iteration) * self.batch_size
         score = ScoreValue()
         running_loss = []
         memory_usage = []
