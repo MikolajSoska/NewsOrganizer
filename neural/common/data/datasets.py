@@ -8,16 +8,16 @@ from torchtext.data.utils import get_tokenizer
 
 class DatasetGenerator:
     @classmethod
-    def generate_dataset(cls, dataset_name: str, split: str) -> Iterator[Tuple[Any, ...]]:
+    def generate_dataset(cls, dataset_name: str, split: str, for_vocab: bool = False) -> Iterator[Tuple[Any, ...]]:
         if dataset_name == 'cnn_dailymail':
-            return cls.__generate_cnn_dailymail(split)
+            return cls.__generate_cnn_dailymail(split, for_vocab)
         elif dataset_name == 'conll2003':
-            return cls.__generate_conll2003(split)
+            return cls.__generate_conll2003(split, for_vocab)
         else:
             raise ValueError(f'Dataset "{dataset_name}" is not supported.')
 
     @classmethod
-    def __generate_cnn_dailymail(cls, split: str) -> Iterator[Tuple[List[str], List[str]]]:
+    def __generate_cnn_dailymail(cls, split: str, for_vocab: bool) -> Iterator[Tuple[List[str], ...]]:
         dataset = datasets.load_dataset('cnn_dailymail', '3.0.0', split=split)
         dataset = dataset.to_dict()
         texts = dataset['article']
@@ -27,14 +27,20 @@ class DatasetGenerator:
         for text, summary in tqdm.tqdm(zip(texts, summaries), total=len(texts), file=sys.stdout):
             text_tokens = tokenizer(text)
             summary_tokens = tokenizer(summary)
-            yield text_tokens, summary_tokens
+            if for_vocab:
+                yield (text_tokens + summary_tokens),
+            else:
+                yield text_tokens, summary_tokens
 
     @classmethod
-    def __generate_conll2003(cls, split: str) -> Iterator[Tuple[List[str], List[str]]]:
+    def __generate_conll2003(cls, split: str, for_vocab: bool) -> Iterator[Tuple[List[str], ...]]:
         dataset = datasets.load_dataset('conll2003', split=split)
         dataset = dataset.to_dict()
         tokens_list = dataset['tokens']
         tags_list = dataset['ner_tags']
 
         for tokens, tags in tqdm.tqdm(zip(tokens_list, tags_list), total=len(tokens_list), file=sys.stdout):
-            yield tokens, tags
+            if for_vocab:
+                yield tokens,
+            else:
+                yield tokens, tags

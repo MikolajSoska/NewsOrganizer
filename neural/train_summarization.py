@@ -6,7 +6,7 @@ from torch import Tensor
 from torchtext.vocab import Vocab
 
 import neural.common.scores as scores
-from neural.common.data.vocab import SpecialTokens, build_vocab
+from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
 from neural.common.trainer import Trainer
@@ -83,7 +83,7 @@ def main():
     args = parse_args()
     set_random_seed(args.seed)
 
-    vocab = build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size)
+    vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size)
     train_dataset = SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
                                          max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
     validation_dataset = SummarizationDataset(args.dataset, 'validation', max_article_length=args.max_article_length,
