@@ -8,7 +8,8 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, T_co
 from torchtext.vocab import Vocab
 
-from neural.common.data import DatasetGenerator, SpecialTokens
+from neural.common.data.datasets import DatasetGenerator
+from neural.common.data.vocab import SpecialTokens
 
 
 class SummarizationDataset(Dataset):

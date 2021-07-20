@@ -6,7 +6,7 @@ from torch import Tensor
 from torchtext.vocab import Vocab
 
 import neural.common.scores as scores
-from neural.common.data import SpecialTokens, build_vocab
+from neural.common.data.vocab import SpecialTokens, build_vocab
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
 from neural.common.trainer import Trainer
