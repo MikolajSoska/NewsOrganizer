@@ -6,10 +6,11 @@ from torch import Tensor
 from torchtext.vocab import Vocab
 
 import neural.common.scores as scores
-import neural.summarization.dataloader as dataloader
+from neural.common.data import SpecialTokens, build_vocab
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
 from neural.common.trainer import Trainer
+from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
 
@@ -82,24 +83,20 @@ def main():
     args = parse_args()
     set_random_seed(args.seed)
 
-    vocab = dataloader.build_vocab(args.dataset, vocab_size=args.vocab_size)
-    train_dataset = dataloader.SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
-                                                    max_summary_length=args.max_summary_length, vocab=vocab,
-                                                    get_oov=True)
-    validation_dataset = dataloader.SummarizationDataset(args.dataset, 'validation',
-                                                         max_article_length=args.max_article_length,
-                                                         max_summary_length=args.max_summary_length, vocab=vocab,
-                                                         get_oov=True)
-    test_dataset = dataloader.SummarizationDataset(args.dataset, 'test', max_article_length=args.max_article_length,
-                                                   max_summary_length=args.max_summary_length, vocab=vocab,
-                                                   get_oov=True)
+    vocab = build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size)
+    train_dataset = SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
+                                         max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
+    validation_dataset = SummarizationDataset(args.dataset, 'validation', max_article_length=args.max_article_length,
+                                              max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
+    test_dataset = SummarizationDataset(args.dataset, 'test', max_article_length=args.max_article_length,
+                                        max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
 
-    train_loader = dataloader.SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
-    validation_loader = dataloader.SummarizationDataLoader(validation_dataset, batch_size=args.batch, get_oov=True)
-    test_loader = dataloader.SummarizationDataLoader(test_dataset, batch_size=args.batch, get_oov=True)
+    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
+    validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.batch, get_oov=True)
+    test_loader = SummarizationDataLoader(test_dataset, batch_size=args.batch, get_oov=True)
 
-    bos_index = vocab.stoi[dataloader.SpecialTokens.BOS]
-    model = PointerGeneratorNetwork(args.vocab_size + len(dataloader.SpecialTokens), bos_index)
+    bos_index = vocab.stoi[SpecialTokens.BOS]
+    model = PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index)
     iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)

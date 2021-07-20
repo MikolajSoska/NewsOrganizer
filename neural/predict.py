@@ -2,9 +2,9 @@ import torch
 from nltk.tokenize import sent_tokenize
 from torchtext.data.utils import get_tokenizer
 
+from neural.common.data import SpecialTokens, build_vocab
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDataset
-from neural.summarization.dataloader import build_vocab, SpecialTokens
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from news.article import NewsArticle
 from utils.general import set_random_seed
@@ -19,7 +19,7 @@ class NewsPredictor:
                                 batch_size=9, char_count=self.__ner_dataset.char_count,
                                 max_word_length=self.__ner_dataset.max_word_length, char_embedding_size=25)
         self.__load_ner_model()
-        self.__summarization_vocab = build_vocab('cnn_dailymail', vocab_size=50000)
+        self.__summarization_vocab = build_vocab('cnn_dailymail', 'summarization', vocab_size=50000)
 
         bos_index = self.__summarization_vocab.stoi[SpecialTokens.BOS]
         self.__summarization = PointerGeneratorNetwork(50000 + len(SpecialTokens), bos_index)
