@@ -1,13 +1,92 @@
+import os
 import string
 from collections import Counter
-from typing import List, Set
+from typing import List, Set, Tuple
 
 import pandas as pd
 import torch
+from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.data.dataset import Dataset
+from torch.utils.data.dataset import Dataset, T_co
 from torchtext.vocab import Vocab
+
+from neural.common.data.datasets import DatasetGenerator
+from neural.common.data.vocab import SpecialTokens, VocabWithChars
+
+
+class NERDatasetNew(Dataset):
+
+    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, data_dir: str = '../data/datasets'):
+        self.__vocab = vocab
+        self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
+
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[Tensor],
+                                                                                          List[int], List[List[int]]]]:
+        dataset_path = f'{data_dir}/dataset-{split}-ner-{dataset_name}-vocab-' \
+                       f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
+        if os.path.exists(dataset_path):
+            return torch.load(dataset_path)
+
+        dataset = []
+        generator = DatasetGenerator.generate_dataset(dataset_name, split)
+        for tokens, tags in generator:
+            word_indexes = []
+            word_types = []
+            char_list = []
+            char_types = []
+            for word in tokens:
+                word_indexes.append(self.__vocab.stoi[word.lower()])
+                word_types.append(self.__get_word_type(word))
+                char_tensor, types = self.__process_word_chars(word)
+                char_list.append(char_tensor)
+                char_types.append(types)
+
+            words_tensor = torch.tensor(word_indexes, dtype=torch.long)
+            tags_tensor = torch.tensor(tags, dtype=torch.long)
+            dataset.append((words_tensor, tags_tensor, char_list, word_types, char_types))
+
+        torch.save(dataset, dataset_path)
+        return dataset
+
+    def __process_word_chars(self, word: str) -> Tuple[Tensor, List[int]]:
+        indexes = []
+        types = []
+        for char in word:
+            indexes.append(self.__vocab.chars.stoi[char])
+            types.append(self.__get_char_type(char))
+
+        return torch.tensor(indexes, dtype=torch.long), types
+
+    @staticmethod
+    def __get_word_type(word: str) -> int:
+        if word.isupper():
+            return 0  # All caps
+        elif word.istitle():
+            return 1  # Upper initial
+        elif word.lower():
+            return 2  # All lower
+        elif any(char.isupper() for char in word):
+            return 3  # Mixed case
+        else:
+            return 4  # No info
+
+    @staticmethod
+    def __get_char_type(char: str) -> int:
+        if char.isupper():
+            return 0  # Upper case
+        elif char.islower():
+            return 1  # Lower case
+        elif char in string.punctuation:
+            return 2  # Punctuation
+        else:
+            return 3  # Other
+
+    def __getitem__(self, index: int) -> T_co:
+        return self.__dataset[index]
+
+    def __len__(self) -> int:
+        return len(self.__dataset)
 
 
 class NERDataset(Dataset):
