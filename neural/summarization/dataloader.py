@@ -28,8 +28,8 @@ class SummarizationDataset(Dataset):
             return torch.load(dataset_path)
 
         dataset = []
-        generator = DatasetGenerator(dataset_name, split)
-        for text_tokens, summary_tokens in generator.generate_dataset():
+        generator = DatasetGenerator.generate_dataset(dataset_name, split)
+        for text_tokens, summary_tokens in generator:
             text_tokens = [SpecialTokens.BOS.value] + text_tokens + [SpecialTokens.EOS.value]
             summary_tokens = [SpecialTokens.BOS.value] + summary_tokens + [SpecialTokens.EOS.value]
             text_tensor, oov_list = self.__get_tokens_tensor(text_tokens)
