@@ -22,7 +22,7 @@ class NERDatasetNew(Dataset):
         self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
 
     def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[Tensor],
-                                                                                          List[int], List[List[int]]]]:
+                                                                                          Tensor, List[Tensor]]]:
         dataset_path = f'{data_dir}/dataset-{split}-ner-{dataset_name}-vocab-' \
                        f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
@@ -44,19 +44,20 @@ class NERDatasetNew(Dataset):
 
             words_tensor = torch.tensor(word_indexes, dtype=torch.long)
             tags_tensor = torch.tensor(tags, dtype=torch.long)
-            dataset.append((words_tensor, tags_tensor, char_list, word_types, char_types))
+            word_types_tensor = torch.tensor(word_types, dtype=torch.long)
+            dataset.append((words_tensor, tags_tensor, char_list, word_types_tensor, char_types))
 
         torch.save(dataset, dataset_path)
         return dataset
 
-    def __process_word_chars(self, word: str) -> Tuple[Tensor, List[int]]:
+    def __process_word_chars(self, word: str) -> Tuple[Tensor, Tensor]:
         indexes = []
         types = []
         for char in word:
             indexes.append(self.__vocab.chars.stoi[char])
             types.append(self.__get_char_type(char))
 
-        return torch.tensor(indexes, dtype=torch.long), types
+        return torch.tensor(indexes, dtype=torch.long), torch.tensor(types, dtype=torch.long)
 
     @staticmethod
     def __get_word_type(word: str) -> int:
