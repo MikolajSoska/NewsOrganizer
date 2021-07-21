@@ -1,3 +1,4 @@
+import itertools
 import os
 import string
 from collections import Counter
@@ -62,32 +63,76 @@ class NERDatasetNew(Dataset):
     @staticmethod
     def __get_word_type(word: str) -> int:
         if word.isupper():
-            return 0  # All caps
+            return 1  # All caps
         elif word.istitle():
-            return 1  # Upper initial
+            return 2  # Upper initial
         elif word.lower():
-            return 2  # All lower
+            return 3  # All lower
         elif any(char.isupper() for char in word):
-            return 3  # Mixed case
+            return 4  # Mixed case
         else:
-            return 4  # No info
+            return 5  # No info
 
     @staticmethod
     def __get_char_type(char: str) -> int:
         if char.isupper():
-            return 0  # Upper case
+            return 1  # Upper case
         elif char.islower():
-            return 1  # Lower case
+            return 2  # Lower case
         elif char in string.punctuation:
-            return 2  # Punctuation
+            return 3  # Punctuation
         else:
-            return 3  # Other
+            return 4  # Other
 
     def __getitem__(self, index: int) -> T_co:
         return self.__dataset[index]
 
     def __len__(self) -> int:
         return len(self.__dataset)
+
+
+class NERDataLoaderNew(DataLoader):
+    def __init__(self, dataset: NERDatasetNew, batch_size: int, conv_kernel_size: int):
+        super().__init__(dataset, batch_size, shuffle=True, collate_fn=self.__generate_batch)
+        self.conv_kernel_size = conv_kernel_size
+
+    def __generate_batch(self, batch: List[Tuple[Tensor, Tensor, List[Tensor], Tensor,
+                                                 List[Tensor]]]) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        words, tags, chars, word_features, char_features = zip(*batch)
+        words_padded = pad_sequence(words)
+        tags_padded = pad_sequence(tags)
+        word_features_padded = pad_sequence(word_features)
+        chars_padded = self.__pad_char_sequence(chars)
+        char_features_padded = self.__pad_char_sequence(char_features)
+
+        return words_padded, tags_padded, chars_padded, word_features_padded, char_features_padded
+
+    def __pad_char_sequence(self, char_sequence: Tuple[List[Tensor]]) -> Tensor:
+        padded_sequences = []
+        max_word_length = len(max(itertools.chain(*char_sequence), key=lambda item: len(item)))
+        max_sequence_length = len(max(char_sequence, key=lambda item: len(item)))
+        for chars in char_sequence:
+            padded_chars = pad_sequence(chars)
+            word_length, sequence_length = padded_chars.shape
+
+            # Pad words to longest one + additional padding for longest word due to kernel size
+            pad_length = max_word_length - word_length + 2 * (self.conv_kernel_size - 1)
+            additional_padding = torch.zeros((pad_length, sequence_length), dtype=torch.long)
+            padded_chars = torch.cat((padded_chars, additional_padding), dim=0)
+
+            if self.conv_kernel_size > 1:  # Two-sided padding is only required when kernel_size is larger than 1
+                for i, word in enumerate(chars):  # Center chars to make two-sided padding
+                    roll_size = (word_length - len(word)) // 2
+                    padded_chars[:, i] = torch.roll(padded_chars[:, i], roll_size)
+
+            # Pad sequences to longest one
+            if max_sequence_length > sequence_length:
+                padding_shape = (pad_length + word_length, max_sequence_length - sequence_length)
+                sequence_padding = torch.zeros(padding_shape, dtype=torch.long)
+                padded_chars = torch.cat((padded_chars, sequence_padding), dim=1)
+            padded_sequences.append(padded_chars)
+
+        return torch.stack(padded_sequences).permute(2, 0, 1)  # Sequence x Batch x Chars
 
 
 class NERDataset(Dataset):
