@@ -82,3 +82,12 @@ class Normalize(nn.Module):
     def forward(self, x_in: Tensor) -> Tensor:
         factor = torch.sum(x_in, dim=self.dimension, keepdim=True)
         return x_in / factor
+
+
+class Max(nn.Module):
+    def __init__(self, dimension: int):
+        super().__init__()
+        self.dimension = dimension
+
+    def forward(self, x_in: Tensor) -> Tensor:
+        return torch.max(x_in, dim=self.dimension)[0]
