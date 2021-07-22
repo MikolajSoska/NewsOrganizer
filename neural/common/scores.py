@@ -53,14 +53,39 @@ class Accuracy(Scorer):
         return ScoreValue(Accuracy=accuracy)
 
 
-class F1Score(Scorer):
-    def __init__(self, average: str):
+class Precision(Scorer):
+    def __init__(self, average: str = 'macro'):
         super().__init__()
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = torch.argmax(predictions, dim=-1)
-        f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average)
+        precision = metrics.precision_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
+                                            average=self.average, zero_division=0)
+        return ScoreValue(Precision=precision)
+
+
+class Recall(Scorer):
+    def __init__(self, average: str = 'macro'):
+        super().__init__()
+        self.average = average
+
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
+        labels = torch.argmax(predictions, dim=-1)
+        precision = metrics.recall_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
+                                         average=self.average, zero_division=0)
+        return ScoreValue(Recall=precision)
+
+
+class F1Score(Scorer):
+    def __init__(self, average: str = 'macro'):
+        super().__init__()
+        self.average = average
+
+    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
+        labels = torch.argmax(predictions, dim=-1)
+        f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average,
+                                    zero_division=0)
         return ScoreValue(F1=f1_score)
 
 
