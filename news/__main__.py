@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main(news_api_key: str):
+def main(news_api_key: str) -> None:
     connector = DatabaseConnector()
     news_getter = NewsGetter(news_api_key)
     predictor = NewsPredictor(use_cuda=True)

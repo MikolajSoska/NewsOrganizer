@@ -79,7 +79,7 @@ def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
         del vocab.stoi[word]
 
 
-def main():
+def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
 
