@@ -27,8 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lr', type=float, default=0.15, help='Learning rate')
     parser.add_argument('--init_acc_value', type=float, default=0.1, help='Initial accumulator value for Adagrad')
     parser.add_argument('--max-gradient-norm', type=int, default=2, help='Max norm for gradient clipping')
-    parser.add_argument('--use-gpu', action='store_true')
-    parser.add_argument('--load-checkpoint', action='store_true')
+    parser.add_argument('--use-gpu', type=bool, action='store_true', help='Train with CUDA')
+    parser.add_argument('--load-checkpoint', type=bool, action='store_true', help='Resume training from checkpoint')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
 
     return parser.parse_args()
