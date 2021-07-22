@@ -34,10 +34,10 @@ class Trainer:
         self.epochs = epochs
         self.batch_size = batch_size
         self.max_gradient_norm = max_gradient_norm
+        self.model_name = model_name
         self.model_save_path = self.__get_save_dir(save_path, 'weights')
         self.log_save_path = self.__get_save_dir(save_path, 'logs')
         self.logger = self.__setup_logger()
-        self.model_name = model_name
         self.device = self.__get_device(use_cuda)
         self.load_checkpoint = load_checkpoint
         self.max_model_backup = max_model_backup
@@ -206,9 +206,8 @@ class Trainer:
             for model in self.model.values():
                 nn.utils.clip_grad_norm_(model.parameters(), self.max_gradient_norm)
 
-    @staticmethod
-    def __get_save_dir(save_path: str, dir_name: str) -> Path:
-        path = Path(save_path) / dir_name
+    def __get_save_dir(self, save_path: str, dir_name: str) -> Path:
+        path = Path(save_path) / dir_name / self.model_name
         path.mkdir(parents=True, exist_ok=True)
         return path
 
