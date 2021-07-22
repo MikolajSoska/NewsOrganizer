@@ -20,10 +20,14 @@ class NERDatasetNew(Dataset):
 
     def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, data_dir: str = '../data/datasets'):
         self.__vocab = vocab
-        self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
+        self.__dataset, self.__tags_number = self.__build_dataset(dataset_name, split, data_dir)
 
-    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[Tensor],
-                                                                                          Tensor, List[Tensor]]]:
+    def get_tags_number(self) -> int:
+        return self.__tags_number
+
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> Tuple[List[Tuple[Tensor, Tensor,
+                                                                                                List[Tensor], Tensor,
+                                                                                                List[Tensor]]], int]:
         dataset_path = f'{data_dir}/dataset-{split}-ner-{dataset_name}-vocab-' \
                        f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
@@ -31,7 +35,9 @@ class NERDatasetNew(Dataset):
 
         dataset = []
         generator = DatasetGenerator.generate_dataset(dataset_name, split)
+        tags_set = set()
         for tokens, tags in generator:
+            tags_set.update(tags)
             word_indexes = []
             word_types = []
             char_list = []
@@ -48,8 +54,9 @@ class NERDatasetNew(Dataset):
             word_types_tensor = torch.tensor(word_types, dtype=torch.long)
             dataset.append((words_tensor, tags_tensor, char_list, word_types_tensor, char_types))
 
-        torch.save(dataset, dataset_path)
-        return dataset
+        tags_number = len(tags_set)
+        torch.save((dataset, tags_number), dataset_path)
+        return dataset, tags_number
 
     def __process_word_chars(self, word: str) -> Tuple[Tensor, Tensor]:
         indexes = []
