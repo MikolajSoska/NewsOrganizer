@@ -70,9 +70,21 @@ def main() -> None:
     else:
         raise NotImplementedError('Pretrained embeddings aren\'t implemented yet')
 
-    model = BiLSTMConv(train_dataset.get_tags_number(), args.cnn_width, args.cnn_output, args.lstm_state,
-                       args.lstm_layers, args.dropout, len(vocab.chars), args.char_embedding_size, len(vocab),
-                       args.word_embedding_size, embeddings, args.word_features, args.char_features)
+    model = BiLSTMConv(
+        output_size=train_dataset.get_tags_number(),
+        conv_width=args.cnn_width,
+        conv_output_size=args.cnn_output,
+        hidden_size=args.lstm_state,
+        lstm_layers=args.lstm_layers,
+        dropout_rate=args.dropout,
+        char_vocab_size=len(vocab.chars),
+        char_embedding_dim=args.char_embedding_size,
+        word_vocab_size=len(vocab),
+        word_embedding_dim=args.word_embedding_size,
+        embeddings=embeddings,
+        use_word_features=args.word_features,
+        use_char_features=args.char_features
+    )
 
     trainer = Trainer(
         train_step=train_step,
