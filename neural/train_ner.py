@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 from typing import Tuple, Any
 
 import torch
@@ -11,7 +12,7 @@ from neural.common.scores import ScoreValue
 from neural.common.trainer import Trainer
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
-from utils.general import set_random_seed
+from utils.general import set_random_seed, dump_args_to_file
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +34,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
     parser.add_argument('--load-checkpoint', action='store_true', help='Resume training from checkpoint')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
+    parser.add_argument('--vocab-path', type=Path, default='../data/vocabs', help='Path to vocab files')
+    parser.add_argument('--data-path', type=Path, default='../data/datasets', help='Path to dataset files')
+    parser.add_argument('--model-path', type=Path, default='../data/models', help='Path to model files')
+    parser.add_argument('--logs-path', type=Path, default='../data/logs', help='Path to logs files')
 
     return parser.parse_args()
 
@@ -56,10 +61,12 @@ def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
 
-    vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char')
-    train_dataset = NERDatasetNew(args.dataset, split='train', vocab=vocab)
-    validation_dataset = NERDatasetNew(args.dataset, split='validation', vocab=vocab)
-    test_dataset = NERDatasetNew(args.dataset, split='test', vocab=vocab)
+    model_name = 'bilstm-cnn'
+    dump_args_to_file(args, args.model_path / model_name)
+    vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path)
+    train_dataset = NERDatasetNew(args.dataset, split='train', vocab=vocab, data_dir=args.data_path)
+    validation_dataset = NERDatasetNew(args.dataset, split='validation', vocab=vocab, data_dir=args.data_path)
+    test_dataset = NERDatasetNew(args.dataset, split='test', vocab=vocab, data_dir=args.data_path)
 
     train_loader = NERDataLoaderNew(train_dataset, batch_size=args.batch, conv_kernel_size=args.cnn_width)
     validation_loader = NERDataLoaderNew(validation_dataset, batch_size=args.batch, conv_kernel_size=args.cnn_width)
@@ -89,10 +96,10 @@ def main() -> None:
     trainer = Trainer(
         train_step=train_step,
         epochs=args.epochs,
-        batch_size=args.batch,
         max_gradient_norm=None,
-        save_path='../data',
-        model_name='bilstm-cnn',
+        model_save_path=args.model_path,
+        log_save_path=args.logs_path,
+        model_name=model_name,
         use_cuda=args.use_gpu,
         load_checkpoint=args.load_checkpoint,
         scores=[Precision(), Recall(), F1Score()]

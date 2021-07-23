@@ -1,6 +1,6 @@
 import enum
-import os
 from collections import Counter
+from pathlib import Path
 from typing import List, Tuple, Iterator
 
 import torch
@@ -35,7 +35,7 @@ class VocabWithChars(Vocab):
 class VocabBuilder:
     @classmethod
     def build_vocab(cls, dataset_name: str, vocab_name: str, vocab_type: str = 'base', vocab_size: int = None,
-                    vocab_dir: str = '../data/vocabs'):
+                    vocab_dir: Path = Path('../data/vocabs')):
         if vocab_type == 'base':
             builder = cls.__build_base_vocab
         elif vocab_type == 'char':
@@ -44,8 +44,9 @@ class VocabBuilder:
             raise ValueError(f'Unrecognized vocab type: "{vocab_type}".')
 
         vocab_size_str = vocab_size or 'all'
-        vocab_path = f'{vocab_dir}/vocab-{vocab_name}-{vocab_size_str}-{dataset_name}.pt'
-        if os.path.exists(vocab_path):
+        vocab_dir.mkdir(parents=True, exist_ok=True)
+        vocab_path = vocab_dir / f'vocab-{vocab_name}-{vocab_size_str}-{dataset_name}.pt'
+        if vocab_path.exists():
             return torch.load(vocab_path)
 
         # Generate vocab from train split

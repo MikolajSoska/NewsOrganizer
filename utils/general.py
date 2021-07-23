@@ -1,11 +1,22 @@
+import argparse
+import json
 import random
-from typing import List, Callable
+from pathlib import Path
+from typing import List, Callable, Any
 
 import numpy as np
 import torch
 from nltk.tokenize import sent_tokenize, word_tokenize
 from torch import Tensor
 from torchtext.vocab import Vocab
+
+
+class JSONPathEncoder(json.JSONEncoder):
+    def default(self, data_object: Any) -> Any:
+        if isinstance(data_object, Path):
+            return str(data_object.as_posix())
+        else:
+            return super().default(data_object)
 
 
 def set_random_seed(seed: int) -> None:
@@ -42,3 +53,10 @@ def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
         tokens.append(token)
 
     return ' '.join(tokens)
+
+
+def dump_args_to_file(args: argparse.Namespace, filepath: Path) -> None:
+    args_dict = vars(args)
+    filepath.mkdir(parents=True, exist_ok=True)
+    with open(filepath / 'args.json', 'w') as file:
+        json.dump(args_dict, file, indent=2, cls=JSONPathEncoder)

@@ -1,7 +1,7 @@
 import itertools
-import os
 import string
 from collections import Counter
+from pathlib import Path
 from typing import List, Set, Tuple
 
 import pandas as pd
@@ -18,19 +18,20 @@ from neural.common.data.vocab import SpecialTokens, VocabWithChars
 
 class NERDatasetNew(Dataset):
 
-    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, data_dir: str = '../data/datasets'):
+    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, data_dir: Path = Path('../data/datasets')):
         self.__vocab = vocab
         self.__dataset, self.__tags_number = self.__build_dataset(dataset_name, split, data_dir)
 
     def get_tags_number(self) -> int:
         return self.__tags_number
 
-    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> Tuple[List[Tuple[Tensor, Tensor,
-                                                                                                List[Tensor], Tensor,
-                                                                                                List[Tensor]]], int]:
-        dataset_path = f'{data_dir}/dataset-{split}-ner-{dataset_name}-vocab-' \
-                       f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
-        if os.path.exists(dataset_path):
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> Tuple[List[Tuple[Tensor, Tensor,
+                                                                                                 List[Tensor], Tensor,
+                                                                                                 List[Tensor]]], int]:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        dataset_path = data_dir / f'dataset-{split}-ner-{dataset_name}-vocab-' \
+                                  f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
+        if dataset_path.exists():
             return torch.load(dataset_path)
 
         dataset = []

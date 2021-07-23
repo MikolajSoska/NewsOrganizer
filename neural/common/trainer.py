@@ -24,7 +24,7 @@ from utils.general import convert_bytes_to_megabytes
 
 class Trainer:
     def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tuple[Tensor, ScoreValue]], epochs: int,
-                 batch_size: int, max_gradient_norm: Optional[int], save_path: str, model_name: str,
+                 max_gradient_norm: Optional[int], model_save_path: Path, log_save_path: Path, model_name: str,
                  use_cuda: bool, load_checkpoint: bool, max_model_backup: int = 3, scores: List[Scorer] = None,
                  validation_scores: List[Scorer] = None, test_scores: List[Scorer] = None, **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
@@ -32,11 +32,10 @@ class Trainer:
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
         self.train_step = train_step
         self.epochs = epochs
-        self.batch_size = batch_size
         self.max_gradient_norm = max_gradient_norm
         self.model_name = model_name
-        self.model_save_path = self.__get_save_dir(save_path, 'weights')
-        self.log_save_path = self.__get_save_dir(save_path, 'logs')
+        self.model_save_path = self.__get_save_dir(model_save_path)
+        self.log_save_path = self.__get_save_dir(log_save_path)
         self.logger = self.__setup_logger()
         self.device = self.__get_device(use_cuda)
         self.load_checkpoint = load_checkpoint
@@ -109,7 +108,7 @@ class Trainer:
     def __train(self, train_loader: DataLoader, validation_loader: Optional[DataLoader], verbosity: int,
                 save_interval: int) -> None:
         if self.load_checkpoint:
-            iteration, epoch_start = self.__load_checkpoint(len(train_loader))
+            iteration, epoch_start = self.__load_checkpoint(len(train_loader), train_loader.batch_size)
         else:
             iteration = 0
             epoch_start = 0
@@ -120,7 +119,7 @@ class Trainer:
         for optimizer in self.optimizer.values():  # Reload optimizer to get correct model device
             optimizer.load_state_dict(optimizer.state_dict())
 
-        self.current_iteration = (epoch_start * len(train_loader) + iteration) * self.batch_size
+        self.current_iteration = (epoch_start * len(train_loader) + iteration) * train_loader.batch_size
         score = ScoreValue()
         running_loss = []
         memory_usage = []
@@ -167,12 +166,12 @@ class Trainer:
             del loss
             if self.device.type == 'cuda':
                 memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
-            self.current_iteration += self.batch_size
+            self.current_iteration += train_loader.batch_size
 
-            if (self.current_iteration // self.batch_size) % save_interval == 0:
-                self.__save_full_checkpoint(epoch, i + 1)
+            if (self.current_iteration // train_loader.batch_size) % save_interval == 0:
+                self.__save_full_checkpoint(epoch, i + 1, train_loader.batch_size)
 
-            if (self.current_iteration // self.batch_size) % verbosity == 0:
+            if (self.current_iteration // train_loader.batch_size) % verbosity == 0:
                 self.__log_progress(running_loss, memory_usage, running_score, time_start, epoch, i, train_length)
                 time_start = time.time()
                 running_loss.clear()
@@ -206,8 +205,8 @@ class Trainer:
             for model in self.model.values():
                 nn.utils.clip_grad_norm_(model.parameters(), self.max_gradient_norm)
 
-    def __get_save_dir(self, save_path: str, dir_name: str) -> Path:
-        path = Path(save_path) / dir_name / self.model_name
+    def __get_save_dir(self, save_path: Path) -> Path:
+        path = save_path / self.model_name
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -258,7 +257,7 @@ class Trainer:
         if self.optimizer is None and self.current_phase == 'train':
             raise AttributeError('Optimizers are not initialized.')
 
-    def __load_checkpoint(self, iteration_number: int) -> Tuple[int, int]:
+    def __load_checkpoint(self, iteration_number: int, batch_size: int) -> Tuple[int, int]:
         self.logger.info('Loading checkpoint...')
 
         checkpoints = self.__get_checkpoint_list()
@@ -270,7 +269,7 @@ class Trainer:
                 optimizer.load_state_dict(checkpoint[f'{name}-optimizer_state_dict'])
             epoch_start = checkpoint['epoch']
             previous_batch_size = checkpoint['batch_size']
-            iteration = checkpoint['iteration'] * previous_batch_size // self.batch_size
+            iteration = checkpoint['iteration'] * previous_batch_size // batch_size
             self.logger.info(f'Epoch set to {epoch_start}. Iteration set to {iteration} of {iteration_number}.')
             del checkpoint
         else:
@@ -281,14 +280,14 @@ class Trainer:
 
         return iteration, epoch_start
 
-    def __save_full_checkpoint(self, epoch: int, iteration: int) -> None:
+    def __save_full_checkpoint(self, epoch: int, iteration: int, batch_size: int) -> None:
         checkpoint = {
             'epoch': epoch,
             'iteration': iteration,
-            'batch_size': self.batch_size,
+            'batch_size': batch_size,
         }
 
-        checkpoint_name = Path(f'{self.model_name}-e{epoch}i{iteration * self.batch_size}.pt')
+        checkpoint_name = Path(f'{self.model_name}-e{epoch}i{iteration * batch_size}.pt')
         self.__save_model_checkpoint(checkpoint_name, checkpoint)
         self.__remove_old_checkpoints()
 
