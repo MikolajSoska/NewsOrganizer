@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 from typing import List, Tuple, Any
 
 import torch
@@ -86,19 +87,17 @@ def main() -> None:
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
                                      vocab_dir=args.vocab_path)
-    train_dataset = SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
-                                         max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
-                                         data_dir=args.data_path)
-    validation_dataset = SummarizationDataset(args.dataset, 'validation', max_article_length=args.max_article_length,
-                                              max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
-                                              data_dir=args.data_path)
-    test_dataset = SummarizationDataset(args.dataset, 'test', max_article_length=args.max_article_length,
-                                        max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
-                                        data_dir=args.data_path)
+    dataset = partial(SummarizationDataset, args.dataset, max_article_length=args.max_article_length,
+                      max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
+                      data_dir=args.data_path)
+    dataloader = partial(SummarizationDataLoader, batch_size=args.batch, get_oov=True)
 
-    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
-    validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.batch, get_oov=True)
-    test_loader = SummarizationDataLoader(test_dataset, batch_size=args.batch, get_oov=True)
+    train_dataset = dataset(split='train')
+    validation_dataset = dataset(split='validation')
+    test_dataset = dataset(split='test')
+    train_loader = dataloader(train_dataset)
+    validation_loader = dataloader(validation_dataset)
+    test_loader = dataloader(test_dataset)
 
     bos_index = vocab.stoi[SpecialTokens.BOS]
     model = PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index)

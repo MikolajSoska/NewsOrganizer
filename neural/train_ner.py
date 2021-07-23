@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 from typing import Tuple, Any
 
 import torch
@@ -57,13 +58,16 @@ def main() -> None:
     model_name = 'bilstm-cnn'
     dump_args_to_file(args, args.model_path / model_name)
     vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path)
-    train_dataset = NERDatasetNew(args.dataset, split='train', vocab=vocab, data_dir=args.data_path)
-    validation_dataset = NERDatasetNew(args.dataset, split='validation', vocab=vocab, data_dir=args.data_path)
-    test_dataset = NERDatasetNew(args.dataset, split='test', vocab=vocab, data_dir=args.data_path)
+    dataset = partial(NERDatasetNew, args.dataset, vocab=vocab, data_dir=args.data_path)
+    dataloader = partial(NERDataLoaderNew, batch_size=args.batch, conv_kernel_size=args.cnn_width)
 
-    train_loader = NERDataLoaderNew(train_dataset, batch_size=args.batch, conv_kernel_size=args.cnn_width)
-    validation_loader = NERDataLoaderNew(validation_dataset, batch_size=args.batch, conv_kernel_size=args.cnn_width)
-    test_loader = NERDataLoaderNew(test_dataset, batch_size=args.batch, conv_kernel_size=args.cnn_width)
+    train_dataset = dataset(split='train')
+    validation_dataset = dataset(split='validation')
+    test_dataset = dataset(split='test')
+
+    train_loader = dataloader(train_dataset)
+    validation_loader = dataloader(validation_dataset)
+    test_loader = dataloader(test_dataset)
 
     if args.pretrained_embeddings == 'no':
         embeddings = None
