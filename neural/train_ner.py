@@ -1,11 +1,13 @@
 import argparse
 from functools import partial
+from pathlib import Path
 from typing import Tuple, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
+from neural.common.data.embeddings import CollobertEmbeddings
 from neural.common.data.vocab import VocabBuilder
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
@@ -27,10 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lstm-layers', type=int, default=1, help='Number of LSTM layers')
     parser.add_argument('--dropout', type=float, default=0.68, help='Dropout rate')
     parser.add_argument('--char-embedding-size', type=int, default=25, help='Size of chars embedding')
-    parser.add_argument('--pretrained-embeddings', choices=['no'], default='no', help='Which pretrained embeddings use')
+    parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert'], default='collobert',
+                        help='Which pretrained embeddings use')
     parser.add_argument('--word-embedding-size', type=int, default=50, help='Size of word embedding (if no pretrained')
     parser.add_argument('--word-features', action='store_true', help='Use additional word features')
     parser.add_argument('--char-features', action='store_true', help='Use additional char features')
+    parser.add_argument('--embedding-path', type=Path, default='../data/embeddings', help='Path to embeddings')
     parser = add_base_train_args(parser)
 
     return parser.parse_args()
@@ -58,6 +62,14 @@ def main() -> None:
     model_name = 'bilstm-cnn'
     dump_args_to_file(args, args.model_path / model_name)
     vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path)
+
+    if args.pretrained_embeddings == 'collobert':
+        vectors = CollobertEmbeddings(args.embedding_path)
+        vocab.load_vectors(vectors)
+        embeddings = vocab.vectors
+    else:
+        embeddings = None
+
     dataset = partial(NERDatasetNew, args.dataset, vocab=vocab, data_dir=args.data_path)
     dataloader = partial(NERDataLoaderNew, batch_size=args.batch, conv_kernel_size=args.cnn_width)
 
@@ -68,11 +80,6 @@ def main() -> None:
     train_loader = dataloader(train_dataset)
     validation_loader = dataloader(validation_dataset)
     test_loader = dataloader(test_dataset)
-
-    if args.pretrained_embeddings == 'no':
-        embeddings = None
-    else:
-        raise NotImplementedError('Pretrained embeddings aren\'t implemented yet')
 
     model = BiLSTMConv(
         output_size=train_dataset.get_tags_number(),

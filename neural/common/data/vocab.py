@@ -1,7 +1,7 @@
 import enum
 from collections import Counter
 from pathlib import Path
-from typing import List, Tuple, Iterator
+from typing import List, Tuple, Iterator, Union
 
 import torch
 from torchtext.vocab import Vocab
@@ -35,7 +35,10 @@ class VocabWithChars(Vocab):
 class VocabBuilder:
     @classmethod
     def build_vocab(cls, dataset_name: str, vocab_name: str, vocab_type: str = 'base', vocab_size: int = None,
-                    vocab_dir: Path = Path('../data/vocabs')):
+                    vocab_dir: Union[Path, str] = '../data/vocabs'):
+        if isinstance(vocab_dir, str):
+            vocab_dir = Path(vocab_dir)
+
         if vocab_type == 'base':
             builder = cls.__build_base_vocab
         elif vocab_type == 'char':
@@ -45,7 +48,7 @@ class VocabBuilder:
 
         vocab_size_str = vocab_size or 'all'
         vocab_dir.mkdir(parents=True, exist_ok=True)
-        vocab_path = vocab_dir / f'vocab-{vocab_name}-{vocab_size_str}-{dataset_name}.pt'
+        vocab_path = vocab_dir / f'vocab-{vocab_name}-{vocab_type}-{vocab_size_str}-{dataset_name}.pt'
         if vocab_path.exists():
             return torch.load(vocab_path)
 
