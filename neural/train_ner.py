@@ -9,7 +9,7 @@ from torch import Tensor
 from neural.common.data.vocab import VocabBuilder
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
-from neural.common.trainer import Trainer
+from neural.common.train import Trainer
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
 from utils.general import set_random_seed, dump_args_to_file

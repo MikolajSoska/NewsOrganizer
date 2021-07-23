@@ -9,7 +9,7 @@ import neural.common.scores as scores
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
-from neural.common.trainer import Trainer
+from neural.common.train import Trainer
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 from utils.general import set_random_seed
