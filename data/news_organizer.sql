@@ -33,11 +33,25 @@ CREATE TABLE `news_articles`
     `summary`      text
 );
 
+CREATE TABLE `datasets`
+(
+    `id`   int PRIMARY KEY AUTO_INCREMENT,
+    `name` varchar(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE `tag_categories`
+(
+    `id`            int PRIMARY KEY AUTO_INCREMENT,
+    `category_name` varchar(255) UNIQUE NOT NULL
+);
+
 CREATE TABLE `tags`
 (
-    `id`        int PRIMARY KEY AUTO_INCREMENT,
-    `tag_short` varchar(255) UNIQUE NOT NULL,
-    `fullname`  varchar(255) UNIQUE NOT NULL
+    `id`          int PRIMARY KEY AUTO_INCREMENT,
+    `tag`         varchar(255) NOT NULL,
+    `tag_label`   int          NOT NULL,
+    `category_id` int          NOT NULL,
+    `dataset_id`  int          NOT NULL
 );
 
 CREATE TABLE `article_tag_map`
@@ -58,10 +72,20 @@ ALTER TABLE `news_sites`
 ALTER TABLE `news_articles`
     ADD FOREIGN KEY (`site_id`) REFERENCES `news_sites` (`id`);
 
+ALTER TABLE `tags`
+    ADD FOREIGN KEY (`category_id`) REFERENCES `tag_categories` (`id`);
+
+ALTER TABLE `tags`
+    ADD FOREIGN KEY (`dataset_id`) REFERENCES `datasets` (`id`);
+
 ALTER TABLE `article_tag_map`
     ADD FOREIGN KEY (`article_id`) REFERENCES `news_articles` (`id`);
 
 ALTER TABLE `article_tag_map`
     ADD FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`);
 
-CREATE UNIQUE INDEX `article_tag_map_index_0` ON `article_tag_map` (`article_id`, `tag_id`, `position`);
+CREATE UNIQUE INDEX `tags_index_0` ON `tags` (`tag`, `dataset_id`);
+
+CREATE UNIQUE INDEX `tags_index_1` ON `tags` (`tag_label`, `dataset_id`);
+
+CREATE UNIQUE INDEX `article_tag_map_index_2` ON `article_tag_map` (`article_id`, `tag_id`, `position`);

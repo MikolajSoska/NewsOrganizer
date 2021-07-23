@@ -47,17 +47,17 @@ class DatabaseConnector(metaclass=Singleton):
             self.__cursor.execute(query, (article_id, tag_id, word, position))
             self.__database.commit()
 
+    def get_tag_count(self, dataset_name: str) -> int:
+        query = 'SELECT COUNT(*) FROM tags INNER JOIN datasets d on tags.dataset_id = d.id WHERE name = %s'
+        self.__cursor.execute(query, (dataset_name,))
+
+        return self.__cursor.fetchone()[0]
+
     def __get_tag_id(self, tag: str) -> int:
-        query = 'SELECT id FROM tags WHERE tag_short = %s'
+        query = 'SELECT id FROM tags WHERE tag = %s'
         self.__cursor.execute(query, (tag,))
-        tag_id = self.__cursor.fetchone()
-        if tag_id is None:  # TODO: to chyba trzeba usunąć bo wszystkie tagi są dodane wcześniej
-            query = 'INSERT INTO tags VALUES (0, %s, %s)'
-            self.__cursor.execute(query, (tag, tag))
-            self.__database.commit()
-            return self.__cursor.lastrowid
-        else:
-            return tag_id[0]
+
+        return self.__cursor.fetchone()[0]
 
     # TODO refactor (chodzi o te data)
     def get_articles(self) -> List[NewsArticle]:
