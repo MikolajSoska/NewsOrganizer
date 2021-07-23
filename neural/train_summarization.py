@@ -9,10 +9,10 @@ import neural.common.scores as scores
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
-from neural.common.train import Trainer
+from neural.common.train import Trainer, add_base_train_args
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
-from utils.general import set_random_seed
+from utils.general import set_random_seed, dump_args_to_file
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,9 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lr', type=float, default=0.15, help='Learning rate')
     parser.add_argument('--init_acc_value', type=float, default=0.1, help='Initial accumulator value for Adagrad')
     parser.add_argument('--max-gradient-norm', type=int, default=2, help='Max norm for gradient clipping')
-    parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
-    parser.add_argument('--load-checkpoint', action='store_true', help='Resume training from checkpoint')
-    parser.add_argument('--seed', type=int, default=0, help='Random seed')
+    parser = add_base_train_args(parser)
 
     return parser.parse_args()
 
@@ -41,7 +39,8 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     if not model.with_coverage and (trainer.current_phase == 'test' or (trainer.current_phase == 'train' and
                                                                         trainer.current_iteration >=
                                                                         trainer.params.iterations_without_coverage)):
-        trainer.logger.info(f'Iteration {trainer.current_iteration // trainer.batch_size}.'
+        batch_size = texts.shape[1]
+        trainer.logger.info(f'Iteration {trainer.current_iteration // batch_size}.'
                             f' Activated coverage mechanism.')
         model.activate_coverage()
 
@@ -82,14 +81,20 @@ def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
+    model_name = 'summarization-model'
+    dump_args_to_file(args, args.model_path / model_name)
 
-    vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size)
+    vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
+                                     vocab_dir=args.vocab_path)
     train_dataset = SummarizationDataset(args.dataset, 'train', max_article_length=args.max_article_length,
-                                         max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
+                                         max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
+                                         data_dir=args.data_path)
     validation_dataset = SummarizationDataset(args.dataset, 'validation', max_article_length=args.max_article_length,
-                                              max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
+                                              max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
+                                              data_dir=args.data_path)
     test_dataset = SummarizationDataset(args.dataset, 'test', max_article_length=args.max_article_length,
-                                        max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True)
+                                        max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
+                                        data_dir=args.data_path)
 
     train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, get_oov=True)
     validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.batch, get_oov=True)
@@ -104,10 +109,10 @@ def main() -> None:
     trainer = Trainer(
         train_step=train_step,
         epochs=args.epochs,
-        batch_size=args.batch,
         max_gradient_norm=args.max_gradient_norm,
-        save_path='../data',
-        model_name='summarization-model',
+        model_save_path=args.model_path,
+        log_save_path=args.logs_path,
+        model_name=model_name,
         use_cuda=args.use_gpu,
         load_checkpoint=args.load_checkpoint,
         validation_scores=[rouge],

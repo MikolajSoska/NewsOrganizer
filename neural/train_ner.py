@@ -1,5 +1,4 @@
 import argparse
-from pathlib import Path
 from typing import Tuple, Any
 
 import torch
@@ -9,7 +8,7 @@ from torch import Tensor
 from neural.common.data.vocab import VocabBuilder
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
-from neural.common.train import Trainer
+from neural.common.train import Trainer, add_base_train_args
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
 from utils.general import set_random_seed, dump_args_to_file
@@ -31,13 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--word-embedding-size', type=int, default=50, help='Size of word embedding (if no pretrained')
     parser.add_argument('--word-features', action='store_true', help='Use additional word features')
     parser.add_argument('--char-features', action='store_true', help='Use additional char features')
-    parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
-    parser.add_argument('--load-checkpoint', action='store_true', help='Resume training from checkpoint')
-    parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    parser.add_argument('--vocab-path', type=Path, default='../data/vocabs', help='Path to vocab files')
-    parser.add_argument('--data-path', type=Path, default='../data/datasets', help='Path to dataset files')
-    parser.add_argument('--model-path', type=Path, default='../data/models', help='Path to model files')
-    parser.add_argument('--logs-path', type=Path, default='../data/logs', help='Path to logs files')
+    parser = add_base_train_args(parser)
 
     return parser.parse_args()
 
