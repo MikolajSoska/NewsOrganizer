@@ -1,14 +1,16 @@
 import argparse
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torchtext.vocab import GloVe
 
+from database import DatabaseConnector
 from neural.common.data.embeddings import CollobertEmbeddings
-from neural.common.data.vocab import VocabBuilder
+from neural.common.data.vocab import VocabBuilder, VocabWithChars
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
@@ -29,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lstm-layers', type=int, default=1, help='Number of LSTM layers')
     parser.add_argument('--dropout', type=float, default=0.68, help='Dropout rate')
     parser.add_argument('--char-embedding-size', type=int, default=25, help='Size of chars embedding')
-    parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert'], default='collobert',
+    parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert', 'glove'], default='collobert',
                         help='Which pretrained embeddings use')
     parser.add_argument('--word-embedding-size', type=int, default=50, help='Size of word embedding (if no pretrained')
     parser.add_argument('--word-features', action='store_true', help='Use additional word features')
@@ -65,6 +67,10 @@ def main() -> None:
 
     if args.pretrained_embeddings == 'collobert':
         vectors = CollobertEmbeddings(args.embedding_path)
+        vocab.load_vectors(vectors)
+        embeddings = vocab.vectors
+    elif args.pretrained_embeddings == 'glove':
+        vectors = GloVe(name='6B', dim=50, cache=args.embedding_path)
         vocab.load_vectors(vectors)
         embeddings = vocab.vectors
     else:
