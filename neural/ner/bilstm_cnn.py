@@ -82,7 +82,7 @@ class BiLSTMConv(nn.Module):
         char_features = char_features.view((sequence_length, batch_size, -1))
 
         sentences = self.embedding(sentences_in)
-        if word_features_in is not None:
+        if self.word_features is not None:
             additional_features = self.word_features(word_features_in)
             sentences = torch.cat((sentences, additional_features, char_features), dim=-1)
         else:
