@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--word-embedding-size', type=int, default=50, help='Size of word embedding (if no pretrained')
     parser.add_argument('--word-features', action='store_true', help='Use additional word features')
     parser.add_argument('--char-features', action='store_true', help='Use additional char features')
-    parser.add_argument('--embedding-path', type=Path, default='../data/embeddings', help='Path to embeddings')
+    parser.add_argument('--embedding-path', type=Path, default='../data/saved/embeddings', help='Path to embeddings')
     parser = add_base_train_args(parser)
 
     return parser.parse_args()

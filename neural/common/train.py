@@ -361,9 +361,9 @@ def add_base_train_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPar
     parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
     parser.add_argument('--load-checkpoint', action='store_true', help='Resume training from checkpoint')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    parser.add_argument('--vocab-path', type=Path, default='../data/vocabs', help='Path to vocab files')
-    parser.add_argument('--data-path', type=Path, default='../data/datasets', help='Path to dataset files')
-    parser.add_argument('--model-path', type=Path, default='../data/models', help='Path to model files')
-    parser.add_argument('--logs-path', type=Path, default='../data/logs', help='Path to logs files')
+    parser.add_argument('--vocab-path', type=Path, default='../data/saved/vocabs', help='Path to vocab files')
+    parser.add_argument('--data-path', type=Path, default='../data/saved/datasets', help='Path to dataset files')
+    parser.add_argument('--model-path', type=Path, default='../data/saved/models', help='Path to model files')
+    parser.add_argument('--logs-path', type=Path, default='../data/saved/logs', help='Path to logs files')
 
     return parser
