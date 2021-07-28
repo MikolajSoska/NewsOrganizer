@@ -150,12 +150,14 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, bos_index: int, embedding_dim: int = 128, hidden_size: int = 256,
-                 max_summary_length: int = 100):
+    def __init__(self, vocab_size: int, bos_index: int, unk_index: int, embedding_dim: int = 128,
+                 hidden_size: int = 256, max_summary_length: int = 100):
         super().__init__()
         self.hidden_size = hidden_size
+        self.vocab_size = vocab_size
         self.max_summary_length = max_summary_length
         self.bos_index = bos_index
+        self.unk_index = unk_index
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.encoder = Encoder(vocab_size, embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
@@ -189,6 +191,7 @@ class PointerGeneratorNetwork(nn.Module):
 
         for i in range(summaries.shape[0]):
             decoder_input = summaries[i, :]
+            decoder_input[decoder_input >= self.vocab_size] = self.unk_index  # Remove OOV tokens
             decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden, encoder_out,
                                                                                      encoder_features, encoder_mask,
                                                                                      context, coverage, texts_extended,
