@@ -11,9 +11,9 @@ from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
+from neural.common.utils import set_random_seed, dump_args_to_file
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
-from utils.general import set_random_seed, dump_args_to_file
 
 
 def parse_args() -> argparse.Namespace:

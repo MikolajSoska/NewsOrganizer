@@ -20,7 +20,7 @@ from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
 from neural.common.scores import Scorer, ScoreValue
-from utils.general import convert_bytes_to_megabytes
+from neural.common.utils import convert_bytes_to_megabytes
 
 
 class Trainer:

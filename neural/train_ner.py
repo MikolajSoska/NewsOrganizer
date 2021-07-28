@@ -14,9 +14,9 @@ from neural.common.data.vocab import VocabBuilder, VocabWithChars
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
+from neural.common.utils import set_random_seed, dump_args_to_file
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
-from utils.general import set_random_seed, dump_args_to_file
 
 
 def parse_args() -> argparse.Namespace:

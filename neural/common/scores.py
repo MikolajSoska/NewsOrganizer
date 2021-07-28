@@ -11,7 +11,7 @@ from rouge_score import rouge_scorer
 from torch import Tensor
 from torchtext.vocab import Vocab
 
-from utils.general import tensor_to_string
+from neural.common.utils import tensor_to_string
 
 
 class ScoreValue:
