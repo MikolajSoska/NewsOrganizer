@@ -32,29 +32,36 @@ class SummarizationDataset(Dataset):
         for text_tokens, summary_tokens in generator:
             text_tokens = [SpecialTokens.BOS.value] + text_tokens + [SpecialTokens.EOS.value]
             summary_tokens = [SpecialTokens.BOS.value] + summary_tokens + [SpecialTokens.EOS.value]
-            text_tensor, oov_list = self.__get_tokens_tensor(text_tokens)
-            summary_tensor, _ = self.__get_tokens_tensor(summary_tokens, oov_list, update_oov=False)
+            text_tensor, oov_list = self.get_tokens_tensor(text_tokens, self.__vocab)
+            summary_tensor, _ = self.get_tokens_tensor(summary_tokens, self.__vocab, oov_list, update_oov=False)
             dataset.append((text_tensor, summary_tensor, oov_list))
 
         torch.save(dataset, dataset_path)
         return dataset
 
-    def __get_tokens_tensor(self, tokens: List[str], oov_list: List[str] = None,
-                            update_oov: bool = True) -> Tuple[Tensor, List[str]]:
+    @classmethod
+    def get_tokens_tensor(cls, tokens: List[str], vocab: Vocab, oov_list: List[str] = None,
+                          update_oov: bool = True) -> Tuple[Tensor, List[str]]:
         token_indexes = []
         oov_list = oov_list or []
         for token in tokens:
-            token_index = self.__vocab.stoi[token.lower()]
-            if token_index == self.__vocab.unk_index:
+            token_index = vocab.stoi[token.lower()]
+            if token_index == vocab.unk_index:
                 if token.lower() not in oov_list:
                     if update_oov:
                         oov_list.append(token.lower())
-                        token_index = len(self.__vocab) + oov_list.index(token.lower())
+                        token_index = len(vocab) + oov_list.index(token.lower())
                 else:
-                    token_index = len(self.__vocab) + oov_list.index(token.lower())
+                    token_index = len(vocab) + oov_list.index(token.lower())
             token_indexes.append(token_index)
 
         return torch.tensor(token_indexes, dtype=torch.long), oov_list
+
+    @classmethod
+    def remove_oov_words(cls, text: Tensor, vocab: Vocab) -> Tensor:
+        text_without_oov = torch.clone(text)
+        text_without_oov[text >= len(vocab)] = vocab.unk_index
+        return text_without_oov
 
     def __getitem__(self, index: int) -> T_co:
         text, summary, oov_list = self.__dataset[index]
@@ -67,8 +74,7 @@ class SummarizationDataset(Dataset):
             summary = summary[:-1]  # Remove EOS token
 
         if self.__get_oov:
-            text_without_oov = torch.clone(text)
-            text_without_oov[text >= len(self.__vocab)] = self.__vocab.unk_index
+            text_without_oov = self.remove_oov_words(text, self.__vocab)
             summary_without_oov = torch.clone(summary)
             summary_without_oov[summary >= len(self.__vocab)] = self.__vocab.unk_index
             return text_without_oov, summary_without_oov, text, summary, target, oov_list
