@@ -10,7 +10,7 @@ import neural.common.utils as utils
 import neural.train_ner as ner
 import neural.train_summarization as summ
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
-from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
+from neural.ner.dataloader import NERDataset, NERDataLoader
 from neural.summarization.dataloader import SummarizationDataset
 from news.article import NewsArticle
 from utils.database import DatabaseConnector
@@ -87,9 +87,9 @@ class NewsPredictor:
 
     def __set_named_entities(self, article: NewsArticle) -> NewsArticle:
         tokens = utils.tokenize_text_content(article.content, word_tokenizer=self.__tokenizer)
-        words_tensor, word_types_tensor, char_list, char_types = NERDatasetNew.process_tokens(tokens, self.__ner_vocab)
-        chars_tensor = NERDataLoaderNew.pad_char_sequence((char_list,), self.__ner_model.conv_width)
-        chars_types_tensor = NERDataLoaderNew.pad_char_sequence((char_types,), self.__ner_model.conv_width)
+        words_tensor, word_types_tensor, char_list, char_types = NERDataset.process_tokens(tokens, self.__ner_vocab)
+        chars_tensor = NERDataLoader.pad_char_sequence((char_list,), self.__ner_model.conv_width)
+        chars_types_tensor = NERDataLoader.pad_char_sequence((char_types,), self.__ner_model.conv_width)
 
         words_tensor = words_tensor.unsqueeze(1).to(self.__device)
         word_types_tensor = word_types_tensor.unsqueeze(1).to(self.__device)

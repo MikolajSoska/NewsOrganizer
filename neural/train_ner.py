@@ -15,7 +15,7 @@ from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
 from neural.common.utils import set_random_seed, dump_args_to_file
 from neural.ner.bilstm_cnn import BiLSTMConv
-from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
+from neural.ner.dataloader import NERDataset, NERDataLoader
 from utils.database import DatabaseConnector
 
 
@@ -95,8 +95,8 @@ def main() -> None:
     else:
         embeddings = None
 
-    dataset = partial(NERDatasetNew, args.dataset, vocab=vocab, data_dir=args.data_path)
-    dataloader = partial(NERDataLoaderNew, batch_size=args.batch, conv_kernel_size=args.cnn_width)
+    dataset = partial(NERDataset, args.dataset, vocab=vocab, data_dir=args.data_path)
+    dataloader = partial(NERDataLoader, batch_size=args.batch, conv_kernel_size=args.cnn_width)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')
