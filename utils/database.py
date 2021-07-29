@@ -53,6 +53,12 @@ class DatabaseConnector(metaclass=Singleton):
 
         return self.__cursor.fetchone()[0]
 
+    def get_tags_name_dict(self, dataset_name: str) -> Dict[int, str]:
+        query = 'SELECT tag_label, tag FROM tags INNER JOIN datasets d on tags.dataset_id = d.id WHERE d.name = %s'
+        self.__cursor.execute(query, (dataset_name,))
+
+        return dict(self.__cursor.fetchall())
+
     def __get_tag_id(self, tag: str) -> int:
         query = 'SELECT id FROM tags WHERE tag = %s'
         self.__cursor.execute(query, (tag,))
