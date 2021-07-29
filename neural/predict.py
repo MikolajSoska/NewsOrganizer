@@ -1,108 +1,106 @@
+from argparse import Namespace
+from pathlib import Path
+from typing import Union, Any, Callable
+
 import torch
-from nltk.tokenize import sent_tokenize
+import torch.nn as nn
 from torchtext.data.utils import get_tokenizer
 
+import neural.common.utils as utils
+import neural.train_ner as ner
+import neural.train_summarization as summ
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
-from neural.ner.bilstm_cnn import BiLSTMConv
-from neural.ner.dataloader import NERDataset
-from neural.summarization.pointer_generator import PointerGeneratorNetwork
+from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
+from neural.summarization.dataloader import SummarizationDataset
 from news.article import NewsArticle
-from utils.general import set_random_seed
+from utils.database import DatabaseConnector
 
 
 class NewsPredictor:
-    def __init__(self, use_cuda: bool):
-        set_random_seed(0)
-        self.__device = 'cuda' if use_cuda else 'cpu'
-        self.__ner_dataset = NERDataset('../data/ner_dataset.csv', embedding='glove.6B.50d')
-        self.__ner = BiLSTMConv(self.__ner_dataset.vocab.vectors, output_size=self.__ner_dataset.labels_count,
-                                batch_size=9, char_count=self.__ner_dataset.char_count,
-                                max_word_length=self.__ner_dataset.max_word_length, char_embedding_size=25)
-        self.__load_ner_model()
-        self.__summarization_vocab = VocabBuilder.build_vocab('cnn_dailymail', 'summarization', vocab_size=50000)
+    def __init__(self, use_cuda: bool, path_to_models: Union[Path, str] = '../data/saved/models', seed: int = 0):
+        utils.set_random_seed(seed)
+        connector = DatabaseConnector()
+        if isinstance(path_to_models, str):
+            path_to_models = Path(path_to_models)
 
-        bos_index = self.__summarization_vocab.stoi[SpecialTokens.BOS]
-        self.__summarization = PointerGeneratorNetwork(50000 + len(SpecialTokens), bos_index)
-        self.__load_summarization_model()
+        self.__device = utils.get_device(use_cuda)
         self.__tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
+        self.__tags_name_dict = connector.get_tags_name_dict('conll2003')
 
-    def __load_ner_model(self, path_to_weights: str = '../data/weights/model') -> None:
-        weights = torch.load(path_to_weights)
-        self.__ner.load_state_dict(weights)
-        self.__ner.to(self.__device)
-        self.__ner.eval()
-        del weights
+        self.__ner_vocab = VocabBuilder.build_vocab('conll2003', 'ner', vocab_type='char')
+        tags_count = connector.get_tag_count('conll2003') + 1
+        self.__ner_model = self.__load_pretrained_model(path_to_models, ner.create_model_from_args, 'bilstm_cnn',
+                                                        tags_count=tags_count, vocab=self.__ner_vocab)
 
-    def __load_summarization_model(self, path_to_weights: str = '../data/weights/summarization-model-2.pt') -> None:
-        weights = torch.load(path_to_weights)
-        self.__summarization.load_state_dict(weights['model_state_dict'])
-        self.__summarization.to(self.__device)
-        self.__summarization.eval()
-        del weights
-
-    def __create_summarization(self, article_content: str) -> str:
-        tokens = self.__tokenizer(article_content)
-        tokens = [SpecialTokens.BOS.value] + tokens + [SpecialTokens.EOS.value]
-        article_tensor = torch.tensor([self.__summarization_vocab.stoi[token.lower()] for token in tokens],
-                                      device=self.__device)
-        article_tensor = article_tensor.unsqueeze(1)
-        article_length = torch.tensor(len(tokens)).unsqueeze(0)
-
-        summary_out, _, _ = self.__summarization(article_tensor, article_length)
-        summary = []
-        for output in summary_out:
-            token = torch.argmax(output).item()
-            summary.append(self.__summarization_vocab.itos[token])
-
-        return ' '.join(summary)
-
-    def __set_named_entities(self, article: NewsArticle) -> NewsArticle:
-        index = 0
-        for sentence in sent_tokenize(article.content):
-            tokens = self.__tokenizer(sentence)
-            tokens = [token for token in tokens if token.strip()]
-            chars = []
-            for token in tokens:
-                chars.append([self.__ner_dataset.char_to_index[char] if char in self.__ner_dataset.char_to_index else 0
-                              for char in token])
-            chars = self.pad_chars_sequence(chars, len(tokens))
-            chars = chars.repeat((1, 9, 1))
-            article_tensor = torch.tensor([self.__ner_dataset.vocab.stoi[token] for token in tokens],
-                                          device=self.__device)
-            article_tensor = article_tensor.repeat((9, 1)).permute(1, 0)
-
-            tags = self.__ner(article_tensor, chars)
-            tags = torch.argmax(tags, dim=-1)
-            tags = tags[:, 0]
-
-            for tag, word in zip(tags, self.__tokenizer(sentence)):
-                tag = self.__ner_dataset.get_label_name(tag.item())
-                if tag not in ['<pad>', 'O']:
-                    tag = tag.split('-')[1]
-                    article.named_entities[index] = tag
-                index += 1
-
-        return article
-
-    def pad_chars_sequence(self, chars_sequence, sentence_max_length: int):
-        padded_sequences = []
-        for chars in chars_sequence:
-            padded_sequences.append(self.pad_single_sequence(chars))
-        for _ in range(sentence_max_length - len(padded_sequences)):
-            padded_sequences.append(torch.zeros(self.__ner_dataset.max_word_length, dtype=int, device=self.__device))
-        return torch.stack(padded_sequences, dim=1).unsqueeze(0).permute(2, 0, 1)
-
-    def pad_single_sequence(self, chars):
-        forward_pad_length = (self.__ner_dataset.max_word_length - len(chars)) // 2
-        backward_pad_length = forward_pad_length + (self.__ner_dataset.max_word_length - len(chars)) % 2
-
-        return torch.cat([torch.zeros(forward_pad_length, dtype=int, device=self.__device),
-                          torch.tensor(chars, device=self.__device),
-                          torch.zeros(backward_pad_length, dtype=int, device=self.__device)], dim=0)
+        self.__summarization_vocab = VocabBuilder.build_vocab('cnn_dailymail', 'summarization', vocab_size=50000)
+        bos_index = self.__summarization_vocab.stoi[SpecialTokens.BOS.value]
+        unk_index = self.__summarization_vocab.unk_index
+        self.__summarization_model = self.__load_pretrained_model(path_to_models, summ.create_model_from_args,
+                                                                  'pointer_generator', bos_index=bos_index,
+                                                                  unk_index=unk_index)
+        self.__summarization_model.activate_coverage()
 
     def process_article(self, article: NewsArticle) -> NewsArticle:
         summary = self.__create_summarization(article.content)
         article.summary = summary
         article = self.__set_named_entities(article)
+
+        return article
+
+    def __load_pretrained_model(self, path_to_model: Path, model_builder: Callable[[Namespace, Any], nn.Module],
+                                model_name: str, **additional_args: Any) -> nn.Module:
+        args = utils.load_args_from_file(path_to_model / model_name)
+        model = model_builder(args, **additional_args)
+        weights_path = path_to_model / model_name / f'{model_name}.pt'
+        weights = torch.load(weights_path)
+
+        model.load_state_dict(weights[f'{model_name}_state_dict'])
+        model.to(self.__device)
+        model.eval()
+        del weights
+
+        return model
+
+    def __create_summarization(self, article_content: str) -> str:
+        tokens = utils.tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
+        tokens = [SpecialTokens.BOS.value] + tokens + [SpecialTokens.EOS.value]
+        oov_article_tensor, oov_list = SummarizationDataset.get_tokens_tensor(tokens, self.__summarization_vocab)
+        oov_article_tensor = oov_article_tensor.to(self.__device)
+        oov_article_tensor = oov_article_tensor.unsqueeze(1)
+        article_tensor = SummarizationDataset.remove_oov_words(oov_article_tensor, self.__summarization_vocab)
+        article_length = torch.tensor(len(tokens), device=self.__device).unsqueeze(0)
+
+        summary, _, _ = self.__summarization_model(article_tensor, article_length, oov_article_tensor, len(oov_list))
+        summary_tokens = []
+        vocab_size = len(self.__summarization_vocab)
+        for output in summary:
+            token = torch.argmax(output).item()
+            if token == self.__summarization_vocab.stoi[SpecialTokens.EOS.value]:
+                break  # Discarding tokens after first EOS token
+
+            if token < vocab_size:
+                summary_tokens.append(self.__summarization_vocab.itos[token])
+            else:
+                summary_tokens.append(oov_list[token - vocab_size])
+
+        return ' '.join(summary_tokens)
+
+    def __set_named_entities(self, article: NewsArticle) -> NewsArticle:
+        tokens = utils.tokenize_text_content(article.content, word_tokenizer=self.__tokenizer)
+        words_tensor, word_types_tensor, char_list, char_types = NERDatasetNew.process_tokens(tokens, self.__ner_vocab)
+        chars_tensor = NERDataLoaderNew.pad_char_sequence((char_list,), self.__ner_model.conv_width)
+        chars_types_tensor = NERDataLoaderNew.pad_char_sequence((char_types,), self.__ner_model.conv_width)
+
+        words_tensor = words_tensor.unsqueeze(1).to(self.__device)
+        word_types_tensor = word_types_tensor.unsqueeze(1).to(self.__device)
+        chars_tensor = chars_tensor.to(self.__device)
+        chars_types_tensor = chars_types_tensor.to(self.__device)
+
+        tags = self.__ner_model(words_tensor, chars_tensor, word_types_tensor, chars_types_tensor)
+        tags = torch.argmax(tags, dim=-1).squeeze()
+        for i, tag in enumerate(tags):
+            tag = tag.item()
+            if tag in self.__tags_name_dict:
+                article.named_entities[i] = self.__tags_name_dict[tag]
 
         return article

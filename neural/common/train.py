@@ -20,7 +20,7 @@ from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
 from neural.common.scores import Scorer, ScoreValue
-from neural.common.utils import convert_bytes_to_megabytes
+from neural.common.utils import convert_bytes_to_megabytes, get_device
 
 
 class Trainer:
@@ -38,7 +38,7 @@ class Trainer:
         self.model_save_path = self.__get_save_dir(model_save_path)
         self.log_save_path = self.__get_save_dir(log_save_path)
         self.logger = self.__setup_logger()
-        self.device = self.__get_device(use_cuda)
+        self.device = get_device(use_cuda, log_method=self.logger.info)
         self.load_checkpoint = load_checkpoint
         self.max_model_backup = max_model_backup
         self.train_scores = scores
@@ -231,24 +231,6 @@ class Trainer:
         file_handler.setLevel(logging.INFO)
 
         self.logger.addHandler(file_handler)
-
-    def __get_device(self, use_cuda: bool) -> torch.device:
-        if use_cuda:
-            if torch.cuda.is_available():
-                device = torch.device('cuda')
-                device_properties = torch.cuda.get_device_properties(device)
-                device_name = f'CUDA ({device_properties.name}), ' \
-                              f'Total memory: {convert_bytes_to_megabytes(device_properties.total_memory):g} MB'
-            else:
-                self.logger.info('CUDA device is not available.')
-                device = torch.device('cpu')
-                device_name = 'CPU'
-        else:
-            device = torch.device('cpu')
-            device_name = 'CPU'
-
-        self.logger.info(f'Using device: {device_name}')
-        return device
 
     def __check_initialization(self) -> None:
         if self.model is None:

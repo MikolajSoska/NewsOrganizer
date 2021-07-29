@@ -79,10 +79,14 @@ def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
         del vocab.stoi[word]
 
 
+def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int) -> PointerGeneratorNetwork:
+    return PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index, unk_index)
+
+
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
-    model_name = 'summarization-model'
+    model_name = 'pointer_generator'
     dump_args_to_file(args, args.model_path / model_name)
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
@@ -99,8 +103,7 @@ def main() -> None:
     validation_loader = dataloader(validation_dataset)
     test_loader = dataloader(test_dataset)
 
-    bos_index = vocab.stoi[SpecialTokens.BOS]
-    model = PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index)
+    model = create_model_from_args(args, bos_index=vocab.stoi[SpecialTokens.BOS.value], unk_index=vocab.unk_index)
     iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)

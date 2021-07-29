@@ -57,6 +57,25 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score
 
 
+def create_model_from_args(args: argparse.Namespace, tags_count: int, vocab: VocabWithChars,
+                           embeddings: Tensor = None) -> BiLSTMConv:
+    return BiLSTMConv(
+        output_size=tags_count,
+        conv_width=args.cnn_width,
+        conv_output_size=args.cnn_output,
+        hidden_size=args.lstm_state,
+        lstm_layers=args.lstm_layers,
+        dropout_rate=args.dropout,
+        char_vocab_size=len(vocab.chars),
+        char_embedding_dim=args.char_embedding_size,
+        word_vocab_size=len(vocab),
+        word_embedding_dim=args.word_embedding_size,
+        embeddings=embeddings,
+        use_word_features=args.word_features,
+        use_char_features=args.char_features
+    )
+
+
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
@@ -86,22 +105,7 @@ def main() -> None:
     train_loader = dataloader(train_dataset)
     validation_loader = dataloader(validation_dataset)
     test_loader = dataloader(test_dataset)
-
-    model = BiLSTMConv(
-        output_size=train_dataset.get_tags_number(),
-        conv_width=args.cnn_width,
-        conv_output_size=args.cnn_output,
-        hidden_size=args.lstm_state,
-        lstm_layers=args.lstm_layers,
-        dropout_rate=args.dropout,
-        char_vocab_size=len(vocab.chars),
-        char_embedding_dim=args.char_embedding_size,
-        word_vocab_size=len(vocab),
-        word_embedding_dim=args.word_embedding_size,
-        embeddings=embeddings,
-        use_word_features=args.word_features,
-        use_char_features=args.char_features
-    )
+    model = create_model_from_args(args, DatabaseConnector().get_tag_count(args.dataset) + 1, vocab, embeddings)
 
     trainer = Trainer(
         train_step=train_step,
