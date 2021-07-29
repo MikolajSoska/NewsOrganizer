@@ -42,8 +42,8 @@ class SummarizationDataset(Dataset):
         torch.save(dataset, dataset_path)
         return dataset
 
-    @classmethod
-    def get_tokens_tensor(cls, tokens: List[str], vocab: Vocab, oov_list: List[str] = None,
+    @staticmethod
+    def get_tokens_tensor(tokens: List[str], vocab: Vocab, oov_list: List[str] = None,
                           update_oov: bool = True) -> Tuple[Tensor, List[str]]:
         token_indexes = []
         oov_list = oov_list or []
@@ -60,8 +60,8 @@ class SummarizationDataset(Dataset):
 
         return torch.tensor(token_indexes, dtype=torch.long), oov_list
 
-    @classmethod
-    def remove_oov_words(cls, text: Tensor, vocab: Vocab) -> Tensor:
+    @staticmethod
+    def remove_oov_words(text: Tensor, vocab: Vocab) -> Tensor:
         text_without_oov = torch.clone(text)
         text_without_oov[text >= len(vocab)] = vocab.unk_index
         return text_without_oov
