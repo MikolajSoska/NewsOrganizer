@@ -18,6 +18,7 @@ class BiLSTMConv(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.lstm_layers = lstm_layers
+        self.conv_width = conv_width
 
         self.char_embedding = nn.Sequential(
             nn.Flatten(start_dim=0, end_dim=1),

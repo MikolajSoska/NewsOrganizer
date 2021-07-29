@@ -2,7 +2,7 @@ import itertools
 import string
 from collections import Counter
 from pathlib import Path
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Union
 
 import pandas as pd
 import torch
@@ -17,17 +17,15 @@ from neural.common.data.vocab import SpecialTokens, VocabWithChars
 
 
 class NERDatasetNew(Dataset):
-
-    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, data_dir: Path = Path('../data/datasets')):
+    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars,
+                 data_dir: Union[Path, str] = '../data/saved/datasets'):
+        if isinstance(data_dir, str):
+            data_dir = Path(data_dir)
         self.__vocab = vocab
-        self.__dataset, self.__tags_number = self.__build_dataset(dataset_name, split, data_dir)
+        self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
 
-    def get_tags_number(self) -> int:
-        return self.__tags_number
-
-    def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> Tuple[List[Tuple[Tensor, Tensor,
-                                                                                                 List[Tensor], Tensor,
-                                                                                                 List[Tensor]]], int]:
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> List[Tuple[Tensor, Tensor, List[Tensor],
+                                                                                           Tensor, List[Tensor]]]:
         data_dir.mkdir(parents=True, exist_ok=True)
         dataset_path = data_dir / f'dataset-{split}-ner-{dataset_name}-vocab-' \
                                   f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
@@ -36,35 +34,40 @@ class NERDatasetNew(Dataset):
 
         dataset = []
         generator = DatasetGenerator.generate_dataset(dataset_name, split)
-        tags_set = set()
         for tokens, tags in generator:
-            tags_set.update(tags)
-            word_indexes = []
-            word_types = []
-            char_list = []
-            char_types = []
-            for word in tokens:
-                word_indexes.append(self.__vocab.stoi[word.lower()])
-                word_types.append(self.__get_word_type(word))
-                char_tensor, types = self.__process_word_chars(word)
-                char_list.append(char_tensor)
-                char_types.append(types)
-
-            words_tensor = torch.tensor(word_indexes, dtype=torch.long)
+            words_tensor, word_types_tensor, char_list, char_types = self.process_tokens(tokens, self.__vocab)
             tags_tensor = torch.tensor(tags, dtype=torch.long)
-            word_types_tensor = torch.tensor(word_types, dtype=torch.long)
             dataset.append((words_tensor, tags_tensor, char_list, word_types_tensor, char_types))
+        torch.save(dataset, dataset_path)
 
-        tags_number = len(tags_set)
-        torch.save((dataset, tags_number), dataset_path)
-        return dataset, tags_number
+        return dataset
 
-    def __process_word_chars(self, word: str) -> Tuple[Tensor, Tensor]:
+    @classmethod
+    def process_tokens(cls, tokens: List[str], vocab: VocabWithChars) -> Tuple[Tensor, Tensor, List[Tensor],
+                                                                               List[Tensor]]:
+        word_indexes = []
+        word_types = []
+        char_list = []
+        char_types = []
+        for word in tokens:
+            word_indexes.append(vocab.stoi[word.lower()])
+            word_types.append(cls.__get_word_type(word))
+            char_tensor, types = cls.__process_word_chars(word, vocab)
+            char_list.append(char_tensor)
+            char_types.append(types)
+
+        words_tensor = torch.tensor(word_indexes, dtype=torch.long)
+        word_types_tensor = torch.tensor(word_types, dtype=torch.long)
+
+        return words_tensor, word_types_tensor, char_list, char_types
+
+    @classmethod
+    def __process_word_chars(cls, word: str, vocab: VocabWithChars) -> Tuple[Tensor, Tensor]:
         indexes = []
         types = []
         for char in word:
-            indexes.append(self.__vocab.chars.stoi[char])
-            types.append(self.__get_char_type(char))
+            indexes.append(vocab.chars.stoi[char])
+            types.append(cls.__get_char_type(char))
 
         return torch.tensor(indexes, dtype=torch.long), torch.tensor(types, dtype=torch.long)
 
@@ -110,12 +113,13 @@ class NERDataLoaderNew(DataLoader):
         words_padded = pad_sequence(words)
         tags_padded = pad_sequence(tags)
         word_features_padded = pad_sequence(word_features)
-        chars_padded = self.__pad_char_sequence(chars)
-        char_features_padded = self.__pad_char_sequence(char_features)
+        chars_padded = self.pad_char_sequence(chars, self.conv_kernel_size)
+        char_features_padded = self.pad_char_sequence(char_features, self.conv_kernel_size)
 
         return words_padded, tags_padded, chars_padded, word_features_padded, char_features_padded
 
-    def __pad_char_sequence(self, char_sequence: Tuple[List[Tensor]]) -> Tensor:
+    @staticmethod
+    def pad_char_sequence(char_sequence: Tuple[List[Tensor]], conv_kernel_size: int) -> Tensor:
         padded_sequences = []
         max_word_length = len(max(itertools.chain(*char_sequence), key=lambda item: len(item)))
         max_sequence_length = len(max(char_sequence, key=lambda item: len(item)))
@@ -124,13 +128,13 @@ class NERDataLoaderNew(DataLoader):
             word_length, sequence_length = padded_chars.shape
 
             # Pad words to longest one + additional padding for longest word due to kernel size
-            pad_length = max_word_length - word_length + 2 * (self.conv_kernel_size - 1)
+            pad_length = max_word_length - word_length + 2 * (conv_kernel_size - 1)
             additional_padding = torch.zeros((pad_length, sequence_length), dtype=torch.long)
             padded_chars = torch.cat((padded_chars, additional_padding), dim=0)
 
-            if self.conv_kernel_size > 1:  # Two-sided padding is only required when kernel_size is larger than 1
+            if conv_kernel_size > 1:  # Two-sided padding is only required when kernel_size is larger than 1
                 for i, word in enumerate(chars):  # Center chars to make two-sided padding
-                    roll_size = (word_length - len(word)) // 2
+                    roll_size = (word_length + pad_length - len(word)) // 2
                     padded_chars[:, i] = torch.roll(padded_chars[:, i], roll_size)
 
             # Pad sequences to longest one

@@ -35,7 +35,7 @@ class VocabWithChars(Vocab):
 class VocabBuilder:
     @classmethod
     def build_vocab(cls, dataset_name: str, vocab_name: str, vocab_type: str = 'base', vocab_size: int = None,
-                    vocab_dir: Union[Path, str] = '../data/vocabs'):
+                    vocab_dir: Union[Path, str] = '../data/saved/vocabs'):
         if isinstance(vocab_dir, str):
             vocab_dir = Path(vocab_dir)
 

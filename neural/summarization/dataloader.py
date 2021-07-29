@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import List, Tuple, Union
 
 import torch
@@ -14,16 +15,18 @@ from neural.common.data.vocab import SpecialTokens
 
 class SummarizationDataset(Dataset):
     def __init__(self, dataset_name: str, split: str, max_article_length: int, max_summary_length: int, vocab: Vocab,
-                 get_oov: bool = False, data_dir: str = '../data/datasets'):
+                 get_oov: bool = False, data_dir: Union[Path, str] = '../data/saved/datasets'):
+        if isinstance(data_dir, str):
+            data_dir = Path(data_dir)
         self.__vocab = vocab
         self.__get_oov = get_oov
         self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
         self.__max_article_length = max_article_length
         self.__max_summary_length = max_summary_length
 
-    def __build_dataset(self, dataset_name: str, split: str, data_dir: str) -> List[Tuple[Tensor, Tensor, List[str]]]:
-        dataset_path = f'{data_dir}/dataset-{split}-summarization-{dataset_name}-vocab-' \
-                       f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
+    def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> List[Tuple[Tensor, Tensor, List[str]]]:
+        dataset_path = data_dir / f'dataset-{split}-summarization-{dataset_name}-vocab-' \
+                                  f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
         if os.path.exists(dataset_path):
             return torch.load(dataset_path)
 
@@ -90,7 +93,7 @@ class SummarizationDataset(Dataset):
 
 class SummarizationDataLoader(DataLoader):
     def __init__(self, dataset: SummarizationDataset, batch_size: int, get_oov: bool):
-        super().__init__(dataset, batch_size, shuffle=True, drop_last=True, collate_fn=self.__generate_batch)
+        super().__init__(dataset, batch_size, shuffle=True, drop_last=False, collate_fn=self.__generate_batch)
         self.__get_oov = get_oov
 
     def __generate_batch(self, batch: List) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor],
