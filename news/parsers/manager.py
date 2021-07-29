@@ -1,8 +1,8 @@
 import importlib.util
 from typing import List, Dict, Optional
 
-from database import DatabaseConnector
 from news.parsers.base import BaseNewsParser
+from utils.database import DatabaseConnector
 
 
 class ParsersManager:

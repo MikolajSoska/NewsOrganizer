@@ -1,14 +1,13 @@
 import argparse
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Any, Optional
+from typing import Tuple, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torchtext.vocab import GloVe
 
-from database import DatabaseConnector
 from neural.common.data.embeddings import CollobertEmbeddings
 from neural.common.data.vocab import VocabBuilder, VocabWithChars
 from neural.common.scores import Precision, Recall, F1Score
@@ -17,6 +16,7 @@ from neural.common.train import Trainer, add_base_train_args
 from neural.common.utils import set_random_seed, dump_args_to_file
 from neural.ner.bilstm_cnn import BiLSTMConv
 from neural.ner.dataloader import NERDatasetNew, NERDataLoaderNew
+from utils.database import DatabaseConnector
 
 
 def parse_args() -> argparse.Namespace:

@@ -4,10 +4,10 @@ import sys
 import tqdm
 from torchtext.data.utils import get_tokenizer
 
-from database import DatabaseConnector
 from neural.common.utils import tokenize_text_content
 from neural.predict import NewsPredictor
 from news.getter import NewsGetter
+from utils.database import DatabaseConnector
 
 
 def parse_args() -> argparse.Namespace:

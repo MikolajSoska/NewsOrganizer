@@ -2,7 +2,7 @@ import flask
 from nltk.tokenize import sent_tokenize
 from torchtext.data.utils import get_tokenizer
 
-from database import DatabaseConnector
+from utils.database import DatabaseConnector
 
 app = flask.Flask(__name__)
 connector = DatabaseConnector()
