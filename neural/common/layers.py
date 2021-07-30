@@ -56,6 +56,15 @@ class Permute(nn.Module):
         return x_in.permute(self.dimensions)
 
 
+class Transpose(nn.Module):
+    def __init__(self, *dimensions: int):
+        super().__init__()
+        self.dimensions = dimensions
+
+    def forward(self, x_in: Tensor) -> Tensor:
+        return x_in.transpose(*self.dimensions)
+
+
 class Squeeze(nn.Module):
     def __init__(self, dimension: int = None):
         super().__init__()
