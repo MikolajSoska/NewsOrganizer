@@ -1,6 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
-from typing import Union, Any, Callable
+from typing import List, Tuple, Union, Any, Callable
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,7 @@ class NewsPredictor:
 
         self.__device = utils.get_device(use_cuda)
         self.__tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
-        self.__tags_name_dict = connector.get_tags_name_dict('conll2003')
+        self.__tags_dict = connector.get_tags_dict('conll2003')
 
         self.__ner_vocab = VocabBuilder.build_vocab('conll2003', 'ner', vocab_type='char')
         tags_count = connector.get_tag_count('conll2003') + 1
@@ -41,9 +41,8 @@ class NewsPredictor:
         self.__summarization_model.activate_coverage()
 
     def process_article(self, article: NewsArticle) -> NewsArticle:
-        summary = self.__create_summarization(article.content)
-        article.summary = summary
-        article = self.__set_named_entities(article)
+        article.summary = self.__create_summarization(article.content)
+        article.named_entities = self.__get_named_entities(article.content)
 
         return article
 
@@ -85,8 +84,8 @@ class NewsPredictor:
 
         return ' '.join(summary_tokens)
 
-    def __set_named_entities(self, article: NewsArticle) -> NewsArticle:
-        tokens = utils.tokenize_text_content(article.content, word_tokenizer=self.__tokenizer)
+    def __get_named_entities(self, article_content: str) -> List[Tuple[str, int, int, str]]:
+        tokens = utils.tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
         words_tensor, word_types_tensor, char_list, char_types = NERDataset.process_tokens(tokens, self.__ner_vocab)
         chars_tensor = NERDataLoader.pad_char_sequence((char_list,), self.__ner_model.conv_width)
         chars_types_tensor = NERDataLoader.pad_char_sequence((char_types,), self.__ner_model.conv_width)
@@ -98,9 +97,31 @@ class NewsPredictor:
 
         tags = self.__ner_model(words_tensor, chars_tensor, word_types_tensor, chars_types_tensor)
         tags = torch.argmax(tags, dim=-1).squeeze()
-        for i, tag in enumerate(tags):
-            tag = tag.item()
-            if tag in self.__tags_name_dict:
-                article.named_entities[i] = self.__tags_name_dict[tag]
 
-        return article
+        named_entities = []
+        entity_begun = False
+        for i, (tag, word) in enumerate(zip(tags, tokens)):
+            tag = tag.item()
+            if tag == 0:
+                entity_begun = False
+                continue
+
+            tag_name, category_name = self.__tags_dict[tag]
+            position, tag_name = tag_name.split('-')
+
+            if position == 'B':
+                entity_begun = True
+                named_entities.append((category_name, i, 1, word))  # Initial tag length is 1
+            else:
+                if entity_begun:
+                    if category_name == named_entities[-1][0]:
+                        category_name, index, length, tag_word = named_entities[-1]
+                        # Increase entity length by one and add another word
+                        named_entities[-1] = (category_name, index, length + 1, f'{tag_word} {word}')
+                    else:
+                        named_entities.append((category_name, i, 1, word))
+                        entity_begun = False
+                else:
+                    named_entities.append((category_name, i, 1, word))
+
+        return named_entities

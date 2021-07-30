@@ -30,7 +30,7 @@ class DatabaseConnector(metaclass=Singleton):
 
         return [NewsSite(name, code, country) for name, code in self.__cursor.fetchall()]
 
-    def add_new_article(self, article: NewsArticle, tokens: List[str]) -> None:
+    def add_new_article(self, article: NewsArticle, dataset_name: str) -> None:
         query = 'SELECT id FROM news_sites WHERE code = %s'
         self.__cursor.execute(query, (article.news_site.code,))
         site_id = self.__cursor.fetchone()[0]
@@ -38,14 +38,14 @@ class DatabaseConnector(metaclass=Singleton):
         query = 'INSERT INTO news_articles VALUES (0, %s, %s, %s, %s, %s, %s, %s)'
         self.__cursor.execute(query, (article.title, article.content, article.article_url,
                                       article.article_date, site_id, article.image_url, article.summary))
-        self.__database.commit()
+
         article_id = self.__cursor.lastrowid
-        for position, tag in article.named_entities.items():
-            tag_id = self.__get_tag_id(tag)
-            word = tokens[position]
-            query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s, %s)'
-            self.__cursor.execute(query, (article_id, tag_id, word, position))
-            self.__database.commit()
+        tag_category_dict = self.__get_tag_category_dict(dataset_name)
+        query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s, %s, %s)'
+        for category_name, position, length, words in article.named_entities:
+            self.__cursor.execute(query, (article_id, tag_category_dict[category_name], position, length, words))
+
+        self.__database.commit()
 
     def get_tag_count(self, dataset_name: str) -> int:
         query = 'SELECT COUNT(*) FROM tags INNER JOIN datasets d on tags.dataset_id = d.id WHERE name = %s'
@@ -53,46 +53,46 @@ class DatabaseConnector(metaclass=Singleton):
 
         return self.__cursor.fetchone()[0]
 
-    def get_tags_name_dict(self, dataset_name: str) -> Dict[int, str]:
-        query = 'SELECT tag_label, tag FROM tags INNER JOIN datasets d on tags.dataset_id = d.id WHERE d.name = %s'
+    def get_tags_dict(self, dataset_name: str) -> Dict[int, Tuple[str, str]]:
+        query = 'SELECT tag_label, tag, category_name FROM tags INNER JOIN datasets d on tags.dataset_id = d.id ' \
+                'INNER JOIN tag_categories tc on tags.category_id = tc.id WHERE d.name = %s'
+        self.__cursor.execute(query, (dataset_name,))
+
+        return {tag_label: (tag, category_name) for tag_label, tag, category_name in self.__cursor.fetchall()}
+
+    def __get_tag_category_dict(self, dataset_name: str) -> Dict[str, int]:
+        query = 'SELECT category_name, tc.id FROM tag_categories tc INNER JOIN tags t on tc.id = t.category_id ' \
+                'INNER JOIN datasets d on t.dataset_id = d.id WHERE d.name = %s'
         self.__cursor.execute(query, (dataset_name,))
 
         return dict(self.__cursor.fetchall())
 
-    def __get_tag_id(self, tag: str) -> int:
-        query = 'SELECT id FROM tags WHERE tag = %s'
-        self.__cursor.execute(query, (tag,))
-
-        return self.__cursor.fetchone()[0]
-
-    # TODO refactor (chodzi o te data)
     def get_articles(self) -> List[NewsArticle]:
         query = 'SELECT * FROM news_articles'
         self.__cursor.execute(query)
         articles = []
-        for data in self.__cursor.fetchall():
-            news_site = self.__get_news_site(data[5])
-            article = NewsArticle(data[1], data[2], data[3], data[4], news_site, data[6], data[7])
-            for position, tag in self.__get_named_entities(data[0]):
-                article.named_entities[position] = tag
+        for article_id, title, content, url, date, site_id, image_url, summary in self.__cursor.fetchall():
+            news_site = self.__get_news_site(site_id)
+            article = NewsArticle(title, content, url, date, news_site, image_url, summary)
+            article.named_entities = self.__get_named_entities(article_id)
             articles.append(article)
 
         return articles
 
     def get_article_tags_count(self) -> Dict[str, Counter]:
-        query = 'SELECT DISTINCT article_id, word FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
-                'WHERE fullname = %s'
-        tag_names = self.__get_tag_names()
+        query = 'SELECT DISTINCT article_id, words FROM article_tag_map map INNER JOIN tag_categories tc ON ' \
+                'map.tag_category_id = tc.id WHERE category_name = %s'
+        categories_name = self.__get_tag_categories()
         tag_counts = {}
-        for tag in tag_names:
-            self.__cursor.execute(query, (tag,))
+        for category in categories_name:
+            self.__cursor.execute(query, (category,))
             words = [word for _, word in self.__cursor.fetchall()]
-            tag_counts[tag] = Counter(words)
+            tag_counts[category] = Counter(words)
 
         return tag_counts
 
-    def __get_tag_names(self) -> List[str]:
-        query = 'SELECT fullname FROM tags'
+    def __get_tag_categories(self) -> List[str]:
+        query = 'SELECT category_name FROM tag_categories'
 
         self.__cursor.execute(query)
         return [name[0] for name in self.__cursor.fetchall()]
@@ -105,8 +105,8 @@ class DatabaseConnector(metaclass=Singleton):
 
         return NewsSite(name, code, Country('United States', 'us', 'en'))
 
-    def __get_named_entities(self, article_id: int) -> List[Tuple[int, str]]:
-        query = 'SELECT position, tag_short FROM article_tag_map map INNER JOIN tags t on map.tag_id = t.id ' \
-                'WHERE article_id = %s'
+    def __get_named_entities(self, article_id: int) -> List[Tuple[str, int, int, str]]:
+        query = 'SELECT category_name, position, length, words FROM article_tag_map map INNER JOIN tag_categories tc ' \
+                'ON map.tag_category_id = tc.id WHERE article_id = %s'
         self.__cursor.execute(query, (article_id,))
         return self.__cursor.fetchall()

@@ -56,11 +56,12 @@ CREATE TABLE `tags`
 
 CREATE TABLE `article_tag_map`
 (
-    `id`         int PRIMARY KEY AUTO_INCREMENT,
-    `article_id` int          NOT NULL,
-    `tag_id`     int          NOT NULL,
-    `word`       varchar(255) NOT NULL,
-    `position`   int          NOT NULL
+    `id`              int PRIMARY KEY AUTO_INCREMENT,
+    `article_id`      int          NOT NULL,
+    `tag_category_id` int          NOT NULL,
+    `position`        int          NOT NULL,
+    `length`          int          NOT NULL,
+    `words`           varchar(255) NOT NULL
 );
 
 ALTER TABLE `countries`
@@ -82,10 +83,10 @@ ALTER TABLE `article_tag_map`
     ADD FOREIGN KEY (`article_id`) REFERENCES `news_articles` (`id`);
 
 ALTER TABLE `article_tag_map`
-    ADD FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`);
+    ADD FOREIGN KEY (`tag_category_id`) REFERENCES `tag_categories` (`id`);
 
 CREATE UNIQUE INDEX `tags_index_0` ON `tags` (`tag`, `dataset_id`);
 
 CREATE UNIQUE INDEX `tags_index_1` ON `tags` (`tag_label`, `dataset_id`);
 
-CREATE UNIQUE INDEX `article_tag_map_index_2` ON `article_tag_map` (`article_id`, `tag_id`, `position`);
+CREATE UNIQUE INDEX `article_tag_map_index_2` ON `article_tag_map` (`article_id`, `position`);

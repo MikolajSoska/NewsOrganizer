@@ -1,7 +1,7 @@
 import flask
-from nltk.tokenize import sent_tokenize
 from torchtext.data.utils import get_tokenizer
 
+from neural.common.utils import tokenize_text_content
 from utils.database import DatabaseConnector
 
 app = flask.Flask(__name__)
@@ -19,14 +19,15 @@ def get_articles():
 @app.route('/article/<article_index>', methods=['GET'])
 def show_article(article_index: int):
     article = articles[int(article_index) - 1]
-    content = []
-    for sentence in sent_tokenize(article.content):
-        for word in word_tokenizer(sentence):
-            if len(content) in article.named_entities:
-                word = f'<strong>{word} ({article.named_entities[len(content)]})</strong>'
-            content.append(word)
+    tokens = tokenize_text_content(article.content, word_tokenizer=word_tokenizer)
 
-    content = ' '.join(content)
+    for tag, position, length, _ in article.named_entities:
+        start_token = tokens[position]
+        tokens[position] = f'<strong>{start_token}'
+        end_token = tokens[position + length - 1]
+        tokens[position + length - 1] = f'{end_token} ({tag})</strong>'
+
+    content = ' '.join(tokens)
 
     return flask.render_template('article.html', article=article, content=content)
 
