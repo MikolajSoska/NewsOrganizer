@@ -50,6 +50,10 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     output = torch.flatten(output, end_dim=1)
     tags = torch.flatten(tags)
 
+    # Remove padding from tags and output
+    output = output[tags >= 0]
+    tags = tags[tags >= 0]
+
     loss = trainer.criterion.cross_entropy(output, tags)
     score = trainer.score(output, tags)
     del output
@@ -80,7 +84,7 @@ def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
 
-    model_name = 'bilstm-cnn'
+    model_name = 'bilstm_cnn'
     dump_args_to_file(args, args.model_path / model_name)
     vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path)
 

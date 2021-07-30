@@ -108,7 +108,7 @@ class NERDataLoader(DataLoader):
                                                  List[Tensor]]]) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         words, tags, chars, word_features, char_features = zip(*batch)
         words_padded = pad_sequence(words)
-        tags_padded = pad_sequence(tags)
+        tags_padded = pad_sequence(tags, padding_value=-1)  # Pad with -1 to make mask
         word_features_padded = pad_sequence(word_features)
         chars_padded = self.pad_char_sequence(chars, self.conv_kernel_size)
         char_features_padded = self.pad_char_sequence(char_features, self.conv_kernel_size)
