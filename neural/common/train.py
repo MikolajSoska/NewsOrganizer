@@ -114,7 +114,7 @@ class Trainer:
             iteration = 0
             epoch_start = 0
 
-        for name, model in self.model.items():
+        for model in self.model.values():
             model.train()
 
         for optimizer in self.optimizer.values():  # Reload optimizer to get correct model device
@@ -188,7 +188,9 @@ class Trainer:
         running_score = ScoreValue()
         gc.collect()
 
-        with torch.no_grad():  # TODO add model.eval() (aktualnie wywala jakiś błąd pamięci CUDA przy użyciu eval
+        with torch.no_grad():
+            for model in self.model.values():
+                model.eval()
             for inputs in tqdm.tqdm(data_loader, file=sys.stdout):
                 inputs = self.__convert_input_to_device(inputs)
                 loss, score = self.train_step(self, inputs)
@@ -197,6 +199,9 @@ class Trainer:
                 running_score += score
 
                 del loss
+
+        for model in self.model.values():
+            model.train()
 
         self.logger.info('Result:')
         self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, data_length, data_length)
