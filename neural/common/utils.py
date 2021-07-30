@@ -2,11 +2,10 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Callable, Any
+from typing import Callable, Any
 
 import numpy as np
 import torch
-from nltk.tokenize import sent_tokenize, word_tokenize
 from torch import Tensor
 from torchtext.vocab import Vocab
 
@@ -46,20 +45,6 @@ def get_device(use_cuda: bool, log_method: Callable[[str], None] = print) -> tor
 
     log_method(f'Using device: {device_name}')
     return device
-
-
-def tokenize_text_content(text: str, word_tokenizer: Callable = None, sentence_tokenizer: Callable = None) -> List[str]:
-    if sentence_tokenizer is None:
-        sentence_tokenizer = sent_tokenize
-    if word_tokenizer is None:
-        word_tokenizer = word_tokenize
-
-    content = []
-    for sentence in sentence_tokenizer(text):
-        for word in word_tokenizer(sentence):
-            content.append(word)
-
-    return content
 
 
 def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:

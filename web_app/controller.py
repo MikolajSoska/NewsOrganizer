@@ -1,8 +1,8 @@
 import flask
 from torchtext.data.utils import get_tokenizer
 
-from neural.common.utils import tokenize_text_content
 from utils.database import DatabaseConnector
+from utils.general import tokenize_text_content
 
 app = flask.Flask(__name__)
 connector = DatabaseConnector()

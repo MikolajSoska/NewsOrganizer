@@ -14,6 +14,7 @@ from neural.ner.dataloader import NERDataset, NERDataLoader
 from neural.summarization.dataloader import SummarizationDataset
 from news.article import NewsArticle
 from utils.database import DatabaseConnector
+from utils.general import tokenize_text_content
 
 
 class NewsPredictor:
@@ -61,7 +62,7 @@ class NewsPredictor:
         return model
 
     def __create_summarization(self, article_content: str) -> str:
-        tokens = utils.tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
+        tokens = tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
         tokens = [SpecialTokens.BOS.value] + tokens + [SpecialTokens.EOS.value]
         oov_article_tensor, oov_list = SummarizationDataset.get_tokens_tensor(tokens, self.__summarization_vocab)
         oov_article_tensor = oov_article_tensor.to(self.__device)
@@ -85,7 +86,7 @@ class NewsPredictor:
         return ' '.join(summary_tokens)
 
     def __get_named_entities(self, article_content: str) -> List[Tuple[str, int, int, str]]:
-        tokens = utils.tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
+        tokens = tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
         words_tensor, word_types_tensor, char_list, char_types = NERDataset.process_tokens(tokens, self.__ner_vocab)
         chars_tensor = NERDataLoader.pad_char_sequence((char_list,), self.__ner_model.conv_width)
         chars_types_tensor = NERDataLoader.pad_char_sequence((char_types,), self.__ner_model.conv_width)
