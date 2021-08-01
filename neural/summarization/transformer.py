@@ -7,6 +7,33 @@ from torch import Tensor
 import neural.common.layers as layers
 
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, embedding_dim: int):
+        super().__init__()
+        self.encoding_features = self.__get_encoding_features(embedding_dim)
+
+    @staticmethod
+    def __get_encoding_features(embedding_dim: int) -> nn.Parameter:
+        exponent = 2 * torch.arange(embedding_dim) / embedding_dim
+        encoding_features = torch.full_like(exponent, 1. / 10000)
+        encoding_features = torch.pow(encoding_features, exponent)
+        encoding_features = torch.unsqueeze(encoding_features, dim=0)
+
+        # Constant variable (nn.Parameter to track module device change, etc.)
+        return nn.Parameter(encoding_features, requires_grad=False)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        encoding_positions = torch.arange(inputs.shape[0], device=inputs.device, dtype=torch.float)
+        encoding_positions = torch.unsqueeze(encoding_positions, dim=1)
+
+        encoding = torch.matmul(encoding_positions, self.encoding_features)
+        encoding[:, ::2] = torch.sin(encoding[:, ::2])
+        encoding[:, 1::2] = torch.cos(encoding[:, 1::2])
+        encoding = torch.unsqueeze(encoding, dim=1)
+
+        return inputs + encoding
+
+
 class SelfAttention(nn.Module):
     def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int):
         super().__init__()
