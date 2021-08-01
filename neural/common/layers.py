@@ -100,3 +100,15 @@ class Max(nn.Module):
 
     def forward(self, x_in: Tensor) -> Tensor:
         return torch.max(x_in, dim=self.dimension)[0]
+
+
+class Residual(nn.Module):
+    def __init__(self, module: nn.Module):
+        super().__init__()
+        self.module = module
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        residual = inputs
+        output = self.module(inputs)
+
+        return output + residual
