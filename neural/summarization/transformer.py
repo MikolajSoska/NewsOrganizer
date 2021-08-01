@@ -103,3 +103,19 @@ class EncoderLayer(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         return self.network(inputs)
+
+
+class Encoder(nn.Module):
+    def __init__(self, encoder_layers: int, vocab_size: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
+                 heads_number: int, feed_forward_size: int):
+        super().__init__()
+        encoders = [EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number,
+                                 feed_forward_size) for _ in range(encoder_layers)]
+        self.network = nn.Sequential(
+            nn.Embedding(vocab_size, embedding_dim, padding_idx=0),
+            PositionalEncoding(embedding_dim),
+            *encoders
+        )
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        return self.network(inputs)
