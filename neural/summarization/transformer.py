@@ -71,3 +71,16 @@ class SelfAttention(nn.Module):
         attention = torch.matmul(attention, value)
 
         return self.out(attention)
+
+
+class FeedForward(nn.Module):
+    def __init__(self, embedding_dim: int, feed_forward_size: int):
+        super().__init__()
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embedding_dim, feed_forward_size),
+            nn.ReLU(),
+            nn.Linear(feed_forward_size, embedding_dim)
+        )
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        return self.feed_forward(inputs)
