@@ -84,3 +84,22 @@ class FeedForward(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         return self.feed_forward(inputs)
+
+
+class EncoderLayer(nn.Module):
+    def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int,
+                 feed_forward_size: int):
+        super().__init__()
+        self.network = nn.Sequential(
+            layers.Residual(
+                SelfAttention(embedding_dim, key_and_query_dim, value_dim, heads_number)
+            ),
+            nn.LayerNorm(embedding_dim),
+            layers.Residual(
+                FeedForward(embedding_dim, feed_forward_size)
+            ),
+            nn.LayerNorm(embedding_dim)
+        )
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        return self.network(inputs)
