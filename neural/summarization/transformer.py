@@ -156,3 +156,31 @@ class DecoderLayer(nn.Module):
         out = self.network(self_attention, encoder_out, encoder_out, encoder_mask)
 
         return out, outputs_mask, encoder_out, encoder_mask
+
+
+class Decoder(nn.Module):
+    def __init__(self, decoder_layers: int, vocab_size: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
+                 heads_number: int, feed_forward_size: int):
+        super().__init__()
+        self.embedding = nn.Sequential(
+            nn.Embedding(vocab_size, embedding_dim, padding_idx=0),
+            PositionalEncoding(embedding_dim)
+        )
+        self.decoders = layers.SequentialMultiInput(
+            *[DecoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
+              for _ in range(decoder_layers)]
+        )
+
+    @staticmethod
+    def __get_decoder_mask(sequence):
+        sequence_length = sequence.shape[0]
+        mask = torch.tril(torch.ones(sequence_length, sequence_length, device=sequence.device)).bool()
+        mask = mask.unsqueeze(0).unsqueeze(0)  # Add dimensions to be broadcastable to batch x heads x seq x seq
+        return mask
+
+    def forward(self, outputs: Tensor, outputs_mask: Tensor, encoder_out: Tensor, encoder_mask: Tensor) -> Tensor:
+        outputs_mask = outputs_mask & self.__get_decoder_mask(outputs)
+        embedded = self.embedding(outputs)
+        out, _, _, _ = self.decoders(embedded, outputs_mask, encoder_out, encoder_mask)
+
+        return out
