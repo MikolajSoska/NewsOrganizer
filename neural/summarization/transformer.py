@@ -127,3 +127,32 @@ class Encoder(nn.Module):
         embedded = self.embedding(inputs)
         out, _ = self.encoders(embedded, inputs_mask)
         return out
+
+
+class DecoderLayer(nn.Module):
+    def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int,
+                 feed_forward_size: int):
+        super().__init__()
+        self.self_attention = layers.SequentialMultiInput(
+            layers.Residual(
+                SelfAttention(embedding_dim, key_and_query_dim, value_dim, heads_number)
+            ),
+            nn.LayerNorm(embedding_dim)
+        )
+        self.network = layers.SequentialMultiInput(
+            layers.Residual(
+                SelfAttention(embedding_dim, key_and_query_dim, value_dim, heads_number)
+            ),
+            nn.LayerNorm(embedding_dim),
+            layers.Residual(
+                FeedForward(embedding_dim, feed_forward_size)
+            ),
+            nn.LayerNorm(embedding_dim)
+        )
+
+    def forward(self, outputs: Tensor, outputs_mask: Tensor, encoder_out: Tensor, encoder_mask: Tensor) -> \
+            Tuple[Tensor, Tensor, Tensor, Tensor]:
+        self_attention = self.self_attention(outputs, outputs, outputs, outputs_mask)
+        out = self.network(self_attention, encoder_out, encoder_out, encoder_mask)
+
+        return out, outputs_mask, encoder_out, encoder_mask
