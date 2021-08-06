@@ -111,21 +111,16 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, encoder_layers: int, vocab_size: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
+    def __init__(self, encoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
                  heads_number: int, feed_forward_size: int):
         super().__init__()
-        self.embedding = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim, padding_idx=0),
-            PositionalEncoding(embedding_dim)
-        )
         self.encoders = layers.SequentialMultiInput(
             *[EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
               for _ in range(encoder_layers)]
         )
 
     def forward(self, inputs: Tensor, inputs_mask: Tensor) -> Tensor:
-        embedded = self.embedding(inputs)
-        out, _ = self.encoders(embedded, inputs_mask)
+        out, _ = self.encoders(inputs, inputs_mask)
         return out
 
 
@@ -159,13 +154,9 @@ class DecoderLayer(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, decoder_layers: int, vocab_size: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
+    def __init__(self, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
                  heads_number: int, feed_forward_size: int):
         super().__init__()
-        self.embedding = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim, padding_idx=0),
-            PositionalEncoding(embedding_dim)
-        )
         self.decoders = layers.SequentialMultiInput(
             *[DecoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
               for _ in range(decoder_layers)]
@@ -180,7 +171,40 @@ class Decoder(nn.Module):
 
     def forward(self, outputs: Tensor, outputs_mask: Tensor, encoder_out: Tensor, encoder_mask: Tensor) -> Tensor:
         outputs_mask = outputs_mask & self.__get_decoder_mask(outputs)
-        embedded = self.embedding(outputs)
-        out, _, _, _ = self.decoders(embedded, outputs_mask, encoder_out, encoder_mask)
+        out, _, _, _ = self.decoders(outputs, outputs_mask, encoder_out, encoder_mask)
 
         return out
+
+
+class Transformer(nn.Module):
+    def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
+                 key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
+                 padding_idx: int = 0):
+        super().__init__()
+        self.padding_idx = padding_idx
+        self.embedding = nn.Sequential(
+            nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx),
+            PositionalEncoding(embedding_dim)
+        )
+        self.encoder = Encoder(encoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
+                               feed_forward_size)
+        self.decoder = Decoder(decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
+                               feed_forward_size)
+        self.out = nn.Linear(embedding_dim, vocab_size, bias=False)
+        self.out.weight = self.embedding[0].weight  # Share weights
+
+    def __get_padding_mask(self, sequence):
+        mask = sequence != self.padding_idx
+        mask = mask.transpose(0, 1)
+        mask = mask.unsqueeze(1).unsqueeze(1)  # Add dimensions to be broadcastable to batch x heads x seq x seq
+        return mask
+
+    def forward(self, inputs: Tensor, outputs: Tensor) -> Tensor:
+        inputs_mask = self.__get_padding_mask(inputs)
+        outputs_mask = self.__get_padding_mask(outputs)
+        inputs_padded = self.embedding(inputs)
+        outputs_padded = self.embedding(outputs)
+
+        encoder_out = self.encoder(inputs_padded, inputs_mask)
+        decoder_out = self.decoder(outputs_padded, outputs_mask, encoder_out, inputs_mask)
+        return self.out(decoder_out)
