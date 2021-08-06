@@ -103,12 +103,23 @@ class Max(nn.Module):
 
 
 class Residual(nn.Module):
-    def __init__(self, module: nn.Module):
+    def __init__(self, module: nn.Module, input_position: int = 0):
         super().__init__()
         self.module = module
+        self.input_position = input_position
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        residual = inputs
-        output = self.module(inputs)
+    def forward(self, *inputs: Tensor) -> Tensor:
+        residual = inputs[self.input_position]
+        output = self.module(*inputs)
 
         return output + residual
+
+
+class SequentialMultiInput(nn.Sequential):
+    def forward(self, *inputs: Any) -> Any:
+        for module in self:
+            if not isinstance(inputs, tuple):
+                inputs = (inputs,)
+            inputs = module(*inputs)
+
+        return inputs
