@@ -1,4 +1,5 @@
 import math
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -61,12 +62,15 @@ class SelfAttention(nn.Module):
             layers.Transpose(0, 1)
         )
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        query = self.query(inputs)
-        key = self.key(inputs)
-        value = self.value(inputs)
+    def forward(self, inputs_query: Tensor, inputs_key: Tensor, inputs_value: Tensor, mask: Tensor = None) -> Tensor:
+        query = self.query(inputs_query)
+        key = self.key(inputs_key)
+        value = self.value(inputs_value)
 
         attention = torch.matmul(query, key) / self.scale
+        if mask is not None:
+            attention = attention.masked_fill(mask, -math.inf)
+
         attention = torch.softmax(attention, dim=-1)
         attention = torch.matmul(attention, value)
 
@@ -90,7 +94,7 @@ class EncoderLayer(nn.Module):
     def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int,
                  feed_forward_size: int):
         super().__init__()
-        self.network = nn.Sequential(
+        self.network = layers.SequentialMultiInput(
             layers.Residual(
                 SelfAttention(embedding_dim, key_and_query_dim, value_dim, heads_number)
             ),
@@ -101,21 +105,25 @@ class EncoderLayer(nn.Module):
             nn.LayerNorm(embedding_dim)
         )
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        return self.network(inputs)
+    def forward(self, inputs: Tensor, inputs_mask: Tensor) -> Tuple[Tensor, Tensor]:
+        out = self.network(inputs, inputs, inputs, inputs_mask)
+        return out, inputs_mask
 
 
 class Encoder(nn.Module):
     def __init__(self, encoder_layers: int, vocab_size: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
                  heads_number: int, feed_forward_size: int):
         super().__init__()
-        encoders = [EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number,
-                                 feed_forward_size) for _ in range(encoder_layers)]
-        self.network = nn.Sequential(
+        self.embedding = nn.Sequential(
             nn.Embedding(vocab_size, embedding_dim, padding_idx=0),
-            PositionalEncoding(embedding_dim),
-            *encoders
+            PositionalEncoding(embedding_dim)
+        )
+        self.encoders = layers.SequentialMultiInput(
+            *[EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
+              for _ in range(encoder_layers)]
         )
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        return self.network(inputs)
+    def forward(self, inputs: Tensor, inputs_mask: Tensor) -> Tensor:
+        embedded = self.embedding(inputs)
+        out, _ = self.encoders(embedded, inputs_mask)
+        return out
