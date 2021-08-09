@@ -59,6 +59,7 @@ class SelfAttention(nn.Module):
             layers.Transpose(1, 2),
             nn.Flatten(start_dim=2),
             nn.Linear(heads_number * value_dim, embedding_dim, bias=False),
+            nn.Dropout(0.1),
             layers.Transpose(0, 1)
         )
 
@@ -83,7 +84,8 @@ class FeedForward(nn.Module):
         self.feed_forward = nn.Sequential(
             nn.Linear(embedding_dim, feed_forward_size),
             nn.ReLU(),
-            nn.Linear(feed_forward_size, embedding_dim)
+            nn.Linear(feed_forward_size, embedding_dim),
+            nn.Dropout(0.1)
         )
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -184,7 +186,9 @@ class Transformer(nn.Module):
         self.padding_idx = padding_idx
         self.embedding = nn.Sequential(
             nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx),
-            PositionalEncoding(embedding_dim)
+            layers.Multiply(value=math.sqrt(embedding_dim)),
+            PositionalEncoding(embedding_dim),
+            nn.Dropout(0.1)
         )
         self.encoder = Encoder(encoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
                                feed_forward_size)

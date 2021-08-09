@@ -93,6 +93,15 @@ class Normalize(nn.Module):
         return x_in / factor
 
 
+class Multiply(nn.Module):
+    def __init__(self, value: Union[float, int]):
+        super().__init__()
+        self.value = value
+
+    def forward(self, x_in: Tensor) -> Tensor:
+        return x_in * self.value
+
+
 class Max(nn.Module):
     def __init__(self, dimension: int):
         super().__init__()
