@@ -49,3 +49,23 @@ class CoverageLoss(LossWithReduction):
             return self.reduction(loss)
         else:
             return loss
+
+
+class LabelSmoothingCrossEntropy(LossWithReduction):
+    def __init__(self, smoothing: float, reduction: str = 'mean'):
+        super().__init__(reduction)
+        assert 0 <= smoothing < 1, 'Smoothing value has to be from 0 (inclusively) to 1 (exclusively)'
+        self.smoothing = smoothing
+        self.confidence = 1 - smoothing
+
+    def forward(self, predictions: Tensor, targets: Tensor) -> Tensor:
+        predictions = torch.flatten(predictions, end_dim=1)
+        targets = torch.flatten(targets)
+        class_number = predictions.shape[-1]
+
+        predictions_log = torch.log_softmax(predictions, dim=-1)
+        encoding = torch.full_like(predictions_log, self.smoothing / (class_number - 1))
+        encoding = torch.scatter(encoding, 1, targets.unsqueeze(1), self.confidence)
+        loss = torch.sum(-encoding * predictions_log, dim=-1)
+
+        return self.reduction(loss)
