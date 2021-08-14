@@ -18,7 +18,6 @@ class TransformerAdam(optim.Adam):
         self.steps += 1
         learning_rate = self.__update_learning_rate()
         for param_group in self.param_groups:
-            print(param_group['lr'])
             param_group['lr'] = learning_rate
 
         return result

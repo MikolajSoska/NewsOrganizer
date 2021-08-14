@@ -181,13 +181,13 @@ class Decoder(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
                  key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
-                 max_summary_length: int, bos_index: int, padding_idx: int = 0):
+                 max_summary_length: int, bos_index: int, padding_index: int = 0):
         super().__init__()
         self.max_summary_length = max_summary_length
         self.bos_index = bos_index
-        self.padding_idx = padding_idx
+        self.padding_index = padding_index
         self.embedding = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx),
+            nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_index),
             layers.Multiply(value=math.sqrt(embedding_dim)),
             PositionalEncoding(embedding_dim),
             nn.Dropout(0.1)
@@ -203,7 +203,7 @@ class Transformer(nn.Module):
         self.out[0].weight = self.embedding[0].weight  # Share weights
 
     def __get_padding_mask(self, sequence):
-        mask = sequence == self.padding_idx
+        mask = sequence == self.padding_index
         mask = mask.transpose(0, 1)
         mask = mask.unsqueeze(1).unsqueeze(1)  # Add dimensions to be broadcastable to batch x heads x seq x seq
         return mask
