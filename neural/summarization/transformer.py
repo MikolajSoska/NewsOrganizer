@@ -213,7 +213,7 @@ class Transformer(nn.Module):
             if outputs is None:
                 raise AttributeError('During training reference outputs must be provided.')
         else:  # In validation phase never use passed outputs
-            outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
+            outputs = torch.full((self.max_summary_length + 1, inputs.shape[1]), self.bos_index, dtype=torch.long,
                                  device=inputs.device)
 
         inputs_mask = self.__get_padding_mask(inputs)
@@ -224,10 +224,10 @@ class Transformer(nn.Module):
             out = self.__decoder_step(outputs, encoder_out, inputs_mask)
         else:
             out = None
-            for i in range(outputs.shape[0]):
+            for i in range(self.max_summary_length):
                 decoder_input = outputs[:i + 1, :]
                 out_step = self.__decoder_step(decoder_input, encoder_out, inputs_mask)
-                outputs[:i + 1, :] = torch.argmax(out_step, dim=-1)
+                outputs[1:i + 2, :] = torch.argmax(out_step, dim=-1)
                 out = out_step
 
         return out
