@@ -114,8 +114,7 @@ def main() -> None:
     )
     trainer.set_optimizer(
         adam=TransformerAdam(model.parameters(), betas=tuple(args.adam_betas), eps=args.adam_eps,
-                             model_dim=args.embedding_dim, warmup_steps=args.warmup_steps)
-    )
+                             model_dim=args.embedding_dim, warmup_steps=args.warmup_steps, batch_size=args.batch))
     trainer.train(train_loader, validation_loader)
     trainer.eval(test_loader)
 
