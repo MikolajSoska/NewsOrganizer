@@ -167,12 +167,12 @@ class Decoder(nn.Module):
     @staticmethod
     def __get_decoder_mask(sequence):
         sequence_length = sequence.shape[0]
-        mask = torch.tril(torch.ones(sequence_length, sequence_length, device=sequence.device)).bool()
+        mask = torch.triu(torch.ones(sequence_length, sequence_length, device=sequence.device), diagonal=1).bool()
         mask = mask.unsqueeze(0).unsqueeze(0)  # Add dimensions to be broadcastable to batch x heads x seq x seq
         return mask
 
     def forward(self, outputs: Tensor, outputs_mask: Tensor, encoder_out: Tensor, encoder_mask: Tensor) -> Tensor:
-        outputs_mask = outputs_mask & self.__get_decoder_mask(outputs)
+        outputs_mask = outputs_mask | self.__get_decoder_mask(outputs)
         out, _, _, _ = self.decoders(outputs, outputs_mask, encoder_out, encoder_mask)
 
         return out
@@ -181,8 +181,10 @@ class Decoder(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
                  key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
-                 padding_idx: int = 0):
+                 max_summary_length: int, bos_index: int, padding_idx: int = 0):
         super().__init__()
+        self.max_summary_length = max_summary_length
+        self.bos_index = bos_index
         self.padding_idx = padding_idx
         self.embedding = nn.Sequential(
             nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx),
@@ -194,21 +196,44 @@ class Transformer(nn.Module):
                                feed_forward_size)
         self.decoder = Decoder(decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
                                feed_forward_size)
-        self.out = nn.Linear(embedding_dim, vocab_size, bias=False)
-        self.out.weight = self.embedding[0].weight  # Share weights
+        self.out = nn.Sequential(
+            nn.Linear(embedding_dim, vocab_size, bias=False),
+            nn.Softmax(dim=-1)
+        )
+        self.out[0].weight = self.embedding[0].weight  # Share weights
 
     def __get_padding_mask(self, sequence):
-        mask = sequence != self.padding_idx
+        mask = sequence == self.padding_idx
         mask = mask.transpose(0, 1)
         mask = mask.unsqueeze(1).unsqueeze(1)  # Add dimensions to be broadcastable to batch x heads x seq x seq
         return mask
 
-    def forward(self, inputs: Tensor, outputs: Tensor) -> Tensor:
-        inputs_mask = self.__get_padding_mask(inputs)
-        outputs_mask = self.__get_padding_mask(outputs)
-        inputs_padded = self.embedding(inputs)
-        outputs_padded = self.embedding(outputs)
+    def forward(self, inputs: Tensor, outputs: Tensor = None) -> Tensor:
+        if self.training:
+            if outputs is None:
+                raise AttributeError('During training reference outputs must be provided.')
+        else:  # In validation phase never use passed outputs
+            outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
+                                 device=inputs.device)
 
-        encoder_out = self.encoder(inputs_padded, inputs_mask)
-        decoder_out = self.decoder(outputs_padded, outputs_mask, encoder_out, inputs_mask)
+        inputs_mask = self.__get_padding_mask(inputs)
+        inputs_embedded = self.embedding(inputs)
+
+        encoder_out = self.encoder(inputs_embedded, inputs_mask)
+        if self.training:
+            out = self.__decoder_step(outputs, encoder_out, inputs_mask)
+        else:
+            out = None
+            for i in range(outputs.shape[0]):
+                decoder_input = outputs[:i + 1, :]
+                out_step = self.__decoder_step(decoder_input, encoder_out, inputs_mask)
+                outputs[:i + 1, :] = torch.argmax(out_step, dim=-1)
+                out = out_step
+
+        return out
+
+    def __decoder_step(self, outputs: Tensor, encoder_out: Tensor, inputs_mask: Tensor) -> Tensor:
+        outputs_mask = self.__get_padding_mask(outputs)
+        outputs_embedded = self.embedding(outputs)
+        decoder_out = self.decoder(outputs_embedded, outputs_mask, encoder_out, inputs_mask)
         return self.out(decoder_out)
