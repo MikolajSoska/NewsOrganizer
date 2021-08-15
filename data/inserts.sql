@@ -11,7 +11,8 @@ VALUES (0, 'CNN', 'cnn', 1),
        (0, 'National Geographic', 'national-geographic', 1);
 
 INSERT INTO datasets
-VALUES (0, 'conll2003');
+VALUES (0, 'conll2003'),
+       (0, 'gmb');
 
 # CoNLL2003 dataset
 INSERT INTO tag_categories
@@ -31,4 +32,32 @@ VALUES (0, 'B-PER', 1, 1),
        (0, 'I-MISC', 8, 4);
 
 
+# GMB dataset
+INSERT INTO tag_categories
+VALUES (0, 'Geographical Entities', 2),
+       (0, 'Organizations', 2),
+       (0, 'Persons', 2),
+       (0, 'Geopolitical Entities', 2),
+       (0, 'Time indicator', 2),
+       (0, 'Artifact', 2),
+       (0, 'Event', 2),
+       (0, 'Natural Phenomenon', 2);
 
+
+INSERT INTO tags
+VALUES (0, 'B-GEO', 1, 5),
+       (0, 'I-GEO', 2, 5),
+       (0, 'B-ORG', 3, 6),
+       (0, 'I-ORG', 4, 6),
+       (0, 'B-PER', 5, 7),
+       (0, 'I-PER', 6, 7),
+       (0, 'B-GPE', 7, 8),
+       (0, 'I-GPE', 8, 8),
+       (0, 'B-TIM', 9, 9),
+       (0, 'I-TIM', 10, 9),
+       (0, 'B-ART', 11, 10),
+       (0, 'I-ART', 12, 10),
+       (0, 'B-EVE', 13, 11),
+       (0, 'I-EVE', 14, 11),
+       (0, 'B-NAT', 15, 12),
+       (0, 'I-NAT', 16, 12);
