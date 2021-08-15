@@ -144,7 +144,7 @@ class Decoder(nn.Module):
             device = vocab_dist.device
             vocab_dist = torch.cat((vocab_dist, torch.zeros((batch_size, oov_size), device=device)), dim=1)
 
-        vocab_dist = vocab_dist.scatter_add_(1, texts_extended.permute(1, 0), attention.permute(1, 0))
+        vocab_dist = torch.scatter_add(vocab_dist, 1, texts_extended.permute(1, 0), attention.permute(1, 0))
 
         return vocab_dist, hidden_out, context, attention, coverage_next
 
@@ -167,12 +167,12 @@ class PointerGeneratorNetwork(nn.Module):
 
     def forward(self, texts: Tensor, texts_lengths: Tensor, texts_extended: Tensor,
                 oov_size: int, summaries: Tensor = None) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
-        if summaries is None:
-            if self.training:
+        if self.training:
+            if summaries is None:
                 raise AttributeError('During training reference summaries must be provided.')
-            else:
-                summaries = torch.full((self.max_summary_length, texts.shape[1]), self.bos_index, dtype=torch.long,
-                                       device=texts.device)
+        else:  # In validation phase never use passed summaries
+            summaries = torch.full((self.max_summary_length, texts.shape[1]), self.bos_index, dtype=torch.long,
+                                   device=texts.device)
 
         encoder_out, encoder_features, hidden = self.encoder(texts, texts_lengths)
         encoder_mask = torch.clip(texts, min=0, max=1)
@@ -191,7 +191,8 @@ class PointerGeneratorNetwork(nn.Module):
 
         for i in range(summaries.shape[0]):
             decoder_input = summaries[i, :]
-            decoder_input[decoder_input >= self.vocab_size] = self.unk_index  # Remove OOV tokens
+            if not self.training:  # Remove OOV tokens in validation phase
+                decoder_input[decoder_input >= self.vocab_size] = self.unk_index
             decoder_out, decoder_hidden, context, attention, coverage = self.decoder(decoder_input, hidden, encoder_out,
                                                                                      encoder_features, encoder_mask,
                                                                                      context, coverage, texts_extended,
