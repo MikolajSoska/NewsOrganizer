@@ -21,8 +21,8 @@ class SpecialTokens(enum.Enum):
     def __repr__(self):
         return self.__str__()
 
-    @classmethod
-    def get_tokens(cls) -> List[str]:
+    @staticmethod
+    def get_tokens() -> List[str]:
         return [token.value for token in SpecialTokens]
 
 
@@ -58,16 +58,16 @@ class VocabBuilder:
         torch.save(vocab, vocab_path)
         return vocab
 
-    @classmethod
-    def __build_base_vocab(cls, dataset_generator: Iterator[Tuple[List[str], ...]], vocab_size: int) -> Vocab:
+    @staticmethod
+    def __build_base_vocab(dataset_generator: Iterator[Tuple[List[str], ...]], vocab_size: int) -> Vocab:
         counter = Counter()
         for tokens, in dataset_generator:
             counter.update(token.lower() for token in tokens)
 
         return Vocab(counter, max_size=vocab_size, specials=SpecialTokens.get_tokens())
 
-    @classmethod
-    def __build_vocab_with_chars(cls, dataset_generator: Iterator[Tuple[List[str], ...]],
+    @staticmethod
+    def __build_vocab_with_chars(dataset_generator: Iterator[Tuple[List[str], ...]],
                                  vocab_size: int) -> VocabWithChars:
         words_counter = Counter()
         chars_counter = Counter()

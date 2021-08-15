@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -27,7 +26,7 @@ class SummarizationDataset(Dataset):
     def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> List[Tuple[Tensor, Tensor, List[str]]]:
         dataset_path = data_dir / f'dataset-{split}-summarization-{dataset_name}-vocab-' \
                                   f'{len(self.__vocab) - len(SpecialTokens.get_tokens())}.pt'
-        if os.path.exists(dataset_path):
+        if dataset_path.exists():
             return torch.load(dataset_path)
 
         dataset = []
