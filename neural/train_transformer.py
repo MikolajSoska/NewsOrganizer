@@ -17,7 +17,7 @@ from neural.summarization.transformer import Transformer
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for transformer model training.')
-    parser.add_argument('--dataset', choices=['cnn_dailymail'], default='cnn_dailymail', help='Dataset name')
+    parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch', type=int, default=4, help='Batch size')
     parser.add_argument('--vocab-size', type=int, default=50000, help='Vocabulary size')
