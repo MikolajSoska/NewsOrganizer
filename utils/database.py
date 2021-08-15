@@ -48,21 +48,22 @@ class DatabaseConnector(metaclass=Singleton):
         self.__database.commit()
 
     def get_tag_count(self, dataset_name: str) -> int:
-        query = 'SELECT COUNT(*) FROM tags INNER JOIN datasets d on tags.dataset_id = d.id WHERE name = %s'
+        query = 'SELECT COUNT(*) FROM tags t INNER JOIN tag_categories tc ON t.category_id = tc.id INNER JOIN ' \
+                'datasets d on tc.dataset_id = d.id WHERE name = %s'
         self.__cursor.execute(query, (dataset_name,))
 
         return self.__cursor.fetchone()[0]
 
     def get_tags_dict(self, dataset_name: str) -> Dict[int, Tuple[str, str]]:
-        query = 'SELECT tag_label, tag, category_name FROM tags INNER JOIN datasets d on tags.dataset_id = d.id ' \
-                'INNER JOIN tag_categories tc on tags.category_id = tc.id WHERE d.name = %s'
+        query = 'SELECT tag_label, tag, category_name FROM tags INNER JOIN tag_categories tc ON ' \
+                'tags.category_id = tc.id INNER JOIN datasets d on tc.dataset_id = d.id WHERE d.name = %s'
         self.__cursor.execute(query, (dataset_name,))
 
         return {tag_label: (tag, category_name) for tag_label, tag, category_name in self.__cursor.fetchall()}
 
     def __get_tag_category_dict(self, dataset_name: str) -> Dict[str, int]:
-        query = 'SELECT category_name, tc.id FROM tag_categories tc INNER JOIN tags t on tc.id = t.category_id ' \
-                'INNER JOIN datasets d on t.dataset_id = d.id WHERE d.name = %s'
+        query = 'SELECT category_name, tc.id FROM tag_categories tc INNER JOIN datasets d ON tc.dataset_id = d.id ' \
+                'WHERE d.name = %s'
         self.__cursor.execute(query, (dataset_name,))
 
         return dict(self.__cursor.fetchall())
