@@ -21,7 +21,7 @@ from utils.database import DatabaseConnector
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for named entity recognition model training.')
-    parser.add_argument('--dataset', choices=['conll2003'], default='conll2003', help='Dataset name')
+    parser.add_argument('--dataset', choices=['conll2003', 'gmb'], default='conll2003', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=80, help='Training epochs')
     parser.add_argument('--batch', type=int, default=9, help='Batch size')
     parser.add_argument('--lr', type=float, default=0.0105, help='Learning rate')
