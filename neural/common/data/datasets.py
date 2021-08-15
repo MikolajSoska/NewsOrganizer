@@ -2,7 +2,6 @@ import os
 import shutil
 import sys
 import zipfile
-from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Iterator
 
@@ -11,6 +10,8 @@ import tqdm
 from sklearn.model_selection import train_test_split
 from torchtext.data.utils import get_tokenizer
 from torchtext.utils import download_from_url
+
+from utils.database import DatabaseConnector
 
 
 class DatasetGenerator:
@@ -127,8 +128,9 @@ class DatasetGenerator:
         (dataset_dir / 'validation').mkdir(parents=False, exist_ok=False)
         (dataset_dir / 'test').mkdir(parents=False, exist_ok=False)
 
-        tag_to_index = defaultdict(lambda: len(tag_to_index))
-        tag_to_index['O'] = 0  # Add no-entity tag as first one
+        tag_to_index = DatabaseConnector().get_tags_dict('gmb')
+        tag_to_index = {tag: index for index, (tag, _) in tag_to_index.items()}
+        tag_to_index['O'] = 0  # Add no-entity tag
         for i, text_file in tqdm.tqdm(enumerate(extracted_dir.rglob('*/en.tags')), desc='Processing texts',
                                       file=sys.stdout):
             if i not in text_indexes:
