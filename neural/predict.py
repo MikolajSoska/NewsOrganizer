@@ -7,8 +7,8 @@ import torch.nn as nn
 from torchtext.data.utils import get_tokenizer
 
 import neural.common.utils as utils
-import neural.train_ner as ner
-import neural.train_summarization as summ
+import neural.train_bilstm_cnn as ner
+import neural.train_pointer_generator as summ
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.ner.dataloader import NERDataset, NERDataLoader
 from neural.summarization.dataloader import SummarizationDataset

@@ -17,7 +17,7 @@ from neural.summarization.pointer_generator import PointerGeneratorNetwork
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='Parameters for text summarization model training.')
+    parser = argparse.ArgumentParser(description='Parameters for Pointer-Generator model training.')
     parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=13, help='Training epochs')
     parser.add_argument('--batch', type=int, default=8, help='Batch size')
