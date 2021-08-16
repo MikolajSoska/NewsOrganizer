@@ -9,8 +9,8 @@ import neural.common.layers as layers
 
 class IteratedDilatedCNN(nn.Module):
     def __init__(self, output_size: int, conv_width: int, conv_filters: int, dilation_sizes: List[int],
-                 block_repeats: int, vocab_size: int = None, embedding_dim: int = None, embeddings: Tensor = None,
-                 use_word_features: bool = False):
+                 block_repeats: int, input_dropout: float, block_dropout: float, vocab_size: int = None,
+                 embedding_dim: int = None, embeddings: Tensor = None, use_word_features: bool = False):
         if embeddings is None and (embedding_dim is None or vocab_size is None):
             raise ValueError('Either embeddings vector or embedding dim and vocab size must be passed.')
 
@@ -30,6 +30,7 @@ class IteratedDilatedCNN(nn.Module):
 
         conv_padding = int(conv_width / 2)
         self.first_conv = nn.Sequential(
+            nn.Dropout(input_dropout),
             layers.Permute(1, 2, 0),
             nn.Conv1d(embedding_dim, conv_filters, kernel_size=conv_width, padding=conv_padding),
             nn.ReLU()
@@ -40,6 +41,7 @@ class IteratedDilatedCNN(nn.Module):
             conv_block.append(nn.Conv1d(conv_filters, conv_filters, conv_width, padding=conv_padding * dilation,
                                         dilation=dilation))
             conv_block.append(nn.ReLU())
+            conv_block.append(nn.Dropout(block_dropout))
 
         self.conv_block = nn.Sequential(*conv_block)
         self.out = nn.Sequential(
