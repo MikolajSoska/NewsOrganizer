@@ -28,7 +28,7 @@ class NewsPredictor:
         self.__tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
         self.__tags_dict = connector.get_tags_dict('conll2003')
 
-        self.__ner_vocab = VocabBuilder.build_vocab('conll2003', 'ner', vocab_type='char')
+        self.__ner_vocab = VocabBuilder.build_vocab('conll2003', 'ner', vocab_type='char', digits_to_zero=True)
         tags_count = connector.get_tag_count('conll2003') + 1
         self.__ner_model = self.__load_pretrained_model(path_to_models, ner.create_model_from_args, 'bilstm_cnn',
                                                         tags_count=tags_count, vocab=self.__ner_vocab)
@@ -87,7 +87,9 @@ class NewsPredictor:
 
     def __get_named_entities(self, article_content: str) -> List[Tuple[str, int, int, str]]:
         tokens = tokenize_text_content(article_content, word_tokenizer=self.__tokenizer)
-        words_tensor, word_types_tensor, char_list, char_types = NERDataset.process_tokens(tokens, self.__ner_vocab)
+        words_tensor, word_types_tensor, char_list, char_types = NERDataset.process_tokens(tokens, self.__ner_vocab,
+                                                                                           lowercase=True,
+                                                                                           digits_to_zero=True)
         chars_tensor = NERDataLoader.pad_char_sequence((char_list,), self.__ner_model.conv_width)
         chars_types_tensor = NERDataLoader.pad_char_sequence((char_types,), self.__ner_model.conv_width)
 

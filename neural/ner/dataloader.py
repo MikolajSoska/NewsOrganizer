@@ -11,14 +11,17 @@ from torch.utils.data.dataset import Dataset, T_co
 
 from neural.common.data.datasets import DatasetGenerator
 from neural.common.data.vocab import SpecialTokens, VocabWithChars
+from utils.general import preprocess_token
 
 
 class NERDataset(Dataset):
-    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars,
-                 data_dir: Union[Path, str] = '../data/saved/datasets'):
+    def __init__(self, dataset_name: str, split: str, vocab: VocabWithChars, lowercase: bool = True,
+                 digits_to_zero: bool = True, data_dir: Union[Path, str] = '../data/saved/datasets'):
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
         self.__vocab = vocab
+        self.__lowercase = lowercase
+        self.__digits_to_zero = digits_to_zero
         self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
 
     def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> List[Tuple[Tensor, Tensor, List[Tensor],
@@ -32,7 +35,9 @@ class NERDataset(Dataset):
         dataset = []
         generator = DatasetGenerator.generate_dataset(dataset_name, split)
         for tokens, tags in generator:
-            words_tensor, word_types_tensor, char_list, char_types = self.process_tokens(tokens, self.__vocab)
+            words_tensor, word_types_tensor, char_list, char_types = self.process_tokens(tokens, self.__vocab,
+                                                                                         self.__lowercase,
+                                                                                         self.__digits_to_zero)
             tags_tensor = torch.tensor(tags, dtype=torch.long)
             dataset.append((words_tensor, tags_tensor, char_list, word_types_tensor, char_types))
         torch.save(dataset, dataset_path)
@@ -40,14 +45,14 @@ class NERDataset(Dataset):
         return dataset
 
     @classmethod
-    def process_tokens(cls, tokens: List[str], vocab: VocabWithChars) -> Tuple[Tensor, Tensor, List[Tensor],
-                                                                               List[Tensor]]:
+    def process_tokens(cls, tokens: List[str], vocab: VocabWithChars, lowercase: bool,
+                       digits_to_zero: bool) -> Tuple[Tensor, Tensor, List[Tensor], List[Tensor]]:
         word_indexes = []
         word_types = []
         char_list = []
         char_types = []
         for word in tokens:
-            word_indexes.append(vocab.stoi[word.lower()])
+            word_indexes.append(vocab.stoi[preprocess_token(word, lowercase, digits_to_zero)])
             word_types.append(cls.__get_word_type(word))
             char_tensor, types = cls.__process_word_chars(word, vocab)
             char_list.append(char_tensor)
@@ -74,7 +79,7 @@ class NERDataset(Dataset):
             return 1  # All caps
         elif word.istitle():
             return 2  # Upper initial
-        elif word.lower():
+        elif word.islower():
             return 3  # All lower
         elif any(char.isupper() for char in word):
             return 4  # Mixed case

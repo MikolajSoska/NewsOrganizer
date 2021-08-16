@@ -7,6 +7,7 @@ import torch
 from torchtext.vocab import Vocab
 
 from neural.common.data.datasets import DatasetGenerator
+from utils.general import preprocess_token
 
 
 class SpecialTokens(enum.Enum):
@@ -35,6 +36,7 @@ class VocabWithChars(Vocab):
 class VocabBuilder:
     @classmethod
     def build_vocab(cls, dataset_name: str, vocab_name: str, vocab_type: str = 'base', vocab_size: int = None,
+                    lowercase: bool = True, digits_to_zero: bool = False,
                     vocab_dir: Union[Path, str] = '../data/saved/vocabs'):
         if isinstance(vocab_dir, str):
             vocab_dir = Path(vocab_dir)
@@ -54,25 +56,26 @@ class VocabBuilder:
 
         # Generate vocab from train split
         generator = DatasetGenerator.generate_dataset(dataset_name, 'train', for_vocab=True)
-        vocab = builder(generator, vocab_size)
+        vocab = builder(generator, vocab_size, lowercase, digits_to_zero)
         torch.save(vocab, vocab_path)
         return vocab
 
     @staticmethod
-    def __build_base_vocab(dataset_generator: Iterator[Tuple[List[str], ...]], vocab_size: int) -> Vocab:
+    def __build_base_vocab(dataset_generator: Iterator[Tuple[List[str], ...]], vocab_size: int,
+                           lowercase: bool, digits_to_zero: bool) -> Vocab:
         counter = Counter()
         for tokens, in dataset_generator:
-            counter.update(token.lower() for token in tokens)
+            counter.update(preprocess_token(token, lowercase, digits_to_zero) for token in tokens)
 
         return Vocab(counter, max_size=vocab_size, specials=SpecialTokens.get_tokens())
 
     @staticmethod
-    def __build_vocab_with_chars(dataset_generator: Iterator[Tuple[List[str], ...]],
-                                 vocab_size: int) -> VocabWithChars:
+    def __build_vocab_with_chars(dataset_generator: Iterator[Tuple[List[str], ...]], vocab_size: int,
+                                 lowercase: bool, digits_to_zero: bool) -> VocabWithChars:
         words_counter = Counter()
         chars_counter = Counter()
         for tokens, in dataset_generator:
-            words_counter.update(token.lower() for token in tokens)
+            words_counter.update(preprocess_token(token, lowercase, digits_to_zero) for token in tokens)
             for token in tokens:
                 chars_counter.update(list(token))
 

@@ -86,7 +86,8 @@ def main() -> None:
 
     model_name = 'bilstm_cnn'
     dump_args_to_file(args, args.model_path / model_name)
-    vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path)
+    vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path,
+                                     digits_to_zero=True)
 
     if args.pretrained_embeddings == 'collobert':
         vectors = CollobertEmbeddings(args.embedding_path)
