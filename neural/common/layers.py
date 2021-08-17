@@ -57,12 +57,13 @@ class Permute(nn.Module):
 
 
 class Transpose(nn.Module):
-    def __init__(self, *dimensions: int):
+    def __init__(self, first_dimension: int, second_dimension):
         super().__init__()
-        self.dimensions = dimensions
+        self.first_dimension = first_dimension
+        self.second_dimension = second_dimension
 
     def forward(self, x_in: Tensor) -> Tensor:
-        return x_in.transpose(*self.dimensions)
+        return x_in.transpose(self.first_dimension, self.second_dimension)
 
 
 class Squeeze(nn.Module):
@@ -81,6 +82,15 @@ class Unsqueeze(nn.Module):
 
     def forward(self, x_in: Tensor) -> Tensor:
         return x_in.unsqueeze(dim=self.dimension)
+
+
+class Concatenate(nn.Module):
+    def __init__(self, dimension: int):
+        super().__init__()
+        self.dimension = dimension
+
+    def forward(self, *tensors: Tensor) -> Tensor:
+        return torch.cat(tensors, dim=self.dimension)
 
 
 class Normalize(nn.Module):
