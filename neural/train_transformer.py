@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--value-dim', type=int, default=64, help='Value dimension size')
     parser.add_argument('--heads-number', type=int, default=8, help='Number of heads in self-attention layers')
     parser.add_argument('--ffn-size', type=int, default=2048, help='Size of hidden dimension in feed forward layers')
-    parser.add_argument('--warmup-steps', type=int, default=4096000, help='Number of warmup steps in LR scheduling')
+    parser.add_argument('--warmup-steps', type=int, default=256000, help='Number of warmup steps in LR scheduling')
     parser.add_argument('--adam-betas', type=float, default=[0.9, 0.98], nargs=2, help='Betas for Adam optimizer')
     parser.add_argument('--adam-eps', type=float, default=10e-9, help='Epsilon value for Adam optimizer')
     parser.add_argument('--label-smoothing', type=float, default=0.1, help='Label smoothing value')
