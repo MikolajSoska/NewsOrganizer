@@ -79,13 +79,13 @@ class SelfAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, embedding_dim: int, feed_forward_size: int):
+    def __init__(self, embedding_dim: int, feed_forward_size: int, dropout_rate: float):
         super().__init__()
         self.feed_forward = nn.Sequential(
             nn.Linear(embedding_dim, feed_forward_size),
             nn.ReLU(),
             nn.Linear(feed_forward_size, embedding_dim),
-            nn.Dropout(0.1)
+            nn.Dropout(dropout_rate)
         )
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -94,7 +94,7 @@ class FeedForward(nn.Module):
 
 class EncoderLayer(nn.Module):
     def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int,
-                 feed_forward_size: int):
+                 feed_forward_size: int, dropout_rate: float):
         super().__init__()
         self.network = layers.SequentialMultiInput(
             layers.Residual(
@@ -102,7 +102,7 @@ class EncoderLayer(nn.Module):
             ),
             nn.LayerNorm(embedding_dim),
             layers.Residual(
-                FeedForward(embedding_dim, feed_forward_size)
+                FeedForward(embedding_dim, feed_forward_size, dropout_rate)
             ),
             nn.LayerNorm(embedding_dim, eps=1e-6)
         )
@@ -114,11 +114,11 @@ class EncoderLayer(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, encoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
-                 heads_number: int, feed_forward_size: int):
+                 heads_number: int, feed_forward_size: int, dropout_rate: float):
         super().__init__()
         self.layer_norm = nn.LayerNorm(embedding_dim, eps=1e-6)
         self.encoders = layers.SequentialMultiInput(
-            *[EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
+            *[EncoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size, dropout_rate)
               for _ in range(encoder_layers)]
         )
 
@@ -130,7 +130,7 @@ class Encoder(nn.Module):
 
 class DecoderLayer(nn.Module):
     def __init__(self, embedding_dim: int, key_and_query_dim: int, value_dim: int, heads_number: int,
-                 feed_forward_size: int):
+                 feed_forward_size: int, dropout_rate: float):
         super().__init__()
         self.self_attention = layers.SequentialMultiInput(
             layers.Residual(
@@ -144,7 +144,7 @@ class DecoderLayer(nn.Module):
             ),
             nn.LayerNorm(embedding_dim),
             layers.Residual(
-                FeedForward(embedding_dim, feed_forward_size)
+                FeedForward(embedding_dim, feed_forward_size, dropout_rate)
             ),
             nn.LayerNorm(embedding_dim, eps=1e-6)
         )
@@ -159,11 +159,11 @@ class DecoderLayer(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
-                 heads_number: int, feed_forward_size: int):
+                 heads_number: int, feed_forward_size: int, dropout_rate: float):
         super().__init__()
         self.layer_norm = nn.LayerNorm(embedding_dim, eps=1e-6)
         self.decoders = layers.SequentialMultiInput(
-            *[DecoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size)
+            *[DecoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size, dropout_rate)
               for _ in range(decoder_layers)]
         )
 
@@ -185,7 +185,7 @@ class Decoder(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
                  key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
-                 max_summary_length: int, bos_index: int, padding_index: int = 0):
+                 dropout_rate: float, max_summary_length: int, bos_index: int, padding_index: int = 0):
         super().__init__()
         self.max_summary_length = max_summary_length
         self.bos_index = bos_index
@@ -193,12 +193,12 @@ class Transformer(nn.Module):
         self.embedding = nn.Sequential(
             nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_index),
             PositionalEncoding(embedding_dim),
-            nn.Dropout(0.1)
+            nn.Dropout(dropout_rate)
         )
         self.encoder = Encoder(encoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
-                               feed_forward_size)
+                               feed_forward_size, dropout_rate)
         self.decoder = Decoder(decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
-                               feed_forward_size)
+                               feed_forward_size, dropout_rate)
         self.out = nn.Sequential(
             nn.Linear(embedding_dim, vocab_size, bias=False),
             layers.Multiply(value=embedding_dim ** -0.5),
