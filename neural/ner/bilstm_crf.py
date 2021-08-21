@@ -62,5 +62,6 @@ class BiLSTMCRF(nn.Module):
         predictions = self.out(word_features)
 
         score = self.crf(predictions, tags, mask)
+        predictions = self.crf.decode(predictions, mask)
 
         return score, predictions
