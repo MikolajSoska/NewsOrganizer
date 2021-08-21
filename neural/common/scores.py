@@ -45,10 +45,17 @@ class Scorer(ABC):
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         pass
 
+    @staticmethod
+    def _get_labels(predictions: Tensor) -> Tensor:
+        if isinstance(predictions.cpu(), torch.LongTensor):
+            return predictions
+        else:
+            return torch.argmax(predictions, dim=-1)
+
 
 class Accuracy(Scorer):
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         accuracy = metrics.accuracy_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()))
         return ScoreValue(Accuracy=accuracy)
 
@@ -59,7 +66,7 @@ class Precision(Scorer):
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         precision = metrics.precision_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
                                             average=self.average, zero_division=0)
         return ScoreValue(Precision=precision)
@@ -71,7 +78,7 @@ class Recall(Scorer):
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         precision = metrics.recall_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
                                          average=self.average, zero_division=0)
         return ScoreValue(Recall=precision)
@@ -83,7 +90,7 @@ class F1Score(Scorer):
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average,
                                     zero_division=0)
         return ScoreValue(F1=f1_score)
@@ -97,7 +104,7 @@ class ROUGE(Scorer):
         self.scorer = rouge_scorer.RougeScorer(score_types, use_stemmer=False)
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         scores = dict.fromkeys(self.score_types, 0)
         batch_size = labels.shape[1]
         for i in range(batch_size):
@@ -116,7 +123,7 @@ class METEOR(Scorer):  # TODO add exact match METEOR
         self.vocab = vocab
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = torch.argmax(predictions, dim=-1)
+        labels = self._get_labels(predictions)
         batch_size = labels.shape[1]
         meteor = 0
         for i in range(batch_size):
