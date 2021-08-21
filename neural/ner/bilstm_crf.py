@@ -26,6 +26,7 @@ class BiLSTMCRF(nn.Module):
 
         if embeddings is not None:
             self.word_embedding = nn.Embedding.from_pretrained(embeddings, freeze=False, padding_idx=0)
+            word_embedding_dim = self.word_embedding.embedding_dim
         else:
             self.word_embedding = nn.Embedding(word_vocab_size, word_embedding_dim, padding_idx=0)
 

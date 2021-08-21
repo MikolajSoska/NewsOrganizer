@@ -105,9 +105,13 @@ class NERDataset(Dataset):
 
 
 class NERDataLoader(DataLoader):
-    def __init__(self, dataset: NERDataset, batch_size: int, conv_kernel_size: int):
+    def __init__(self, dataset: NERDataset, batch_size: int, two_sided_char_padding: bool = False,
+                 conv_kernel_size: int = None):
         super().__init__(dataset, batch_size, shuffle=True, collate_fn=self.__generate_batch)
-        self.conv_kernel_size = conv_kernel_size
+        # Padding is always one-sided when kernel size is equal to 1
+        self.conv_kernel_size = conv_kernel_size if two_sided_char_padding else 1
+        if two_sided_char_padding and conv_kernel_size is None:
+            raise ValueError('CNN kernel size must be provided when using two-sided char padding')
 
     def __generate_batch(self, batch: List[Tuple[Tensor, Tensor, List[Tensor], Tensor,
                                                  List[Tensor]]]) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
