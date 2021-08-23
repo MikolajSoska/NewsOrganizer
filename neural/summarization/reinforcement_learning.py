@@ -103,7 +103,8 @@ class Decoder(nn.Module):
         self.vocab_distribution = layers.SequentialMultiInput(
             layers.Concatenate(-1),
             layers.Squeeze(0),
-            nn.Linear(3 * hidden_size, vocab_size),
+            nn.Linear(3 * hidden_size, embedding_dim, bias=False),
+            nn.Linear(embedding_dim, vocab_size),  # This linear has shared weights with embeddings
             nn.Softmax(dim=1)
         )
         self.pointer_probability = layers.SequentialMultiInput(
@@ -112,6 +113,9 @@ class Decoder(nn.Module):
             nn.Linear(3 * hidden_size, 1),
             nn.Sigmoid()
         )
+
+    def share_embedding_weights(self, weight: Tensor) -> None:
+        self.vocab_distribution[3].weight = weight
 
     def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_hidden: Tuple[Tensor],
                 temporal_scores_sum: Optional[Tensor], previous_hidden: Optional[Tensor], texts_extended: Tensor,
@@ -158,6 +162,7 @@ class ReinforcementSummarization(nn.Module):
 
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
+        self.decoder.share_embedding_weights(self.embedding.weight)
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor,
                 oov_size: int, outputs: Tensor = None) -> Tensor:
