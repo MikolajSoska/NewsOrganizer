@@ -136,3 +136,56 @@ class Decoder(nn.Module):
         final_distribution = torch.scatter_add(vocab_distribution, 1, texts_extended.permute(1, 0), attention)
 
         return final_distribution, (hidden, cell), temporal_attention, previous_hidden
+
+
+class ReinforcementSummarization(nn.Module):
+    def __init__(self, vocab_size: int, hidden_size: int, max_summary_length: int, bos_index: int, unk_index: int,
+                 embedding_dim: int = None, embeddings: Tensor = None):
+        if embeddings is None and embedding_dim is None:
+            raise ValueError('Either embeddings vector or embedding dim must be passed.')
+
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.max_summary_length = max_summary_length
+        self.bos_index = bos_index
+        self.unk_index = unk_index
+
+        if embeddings is not None:
+            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False, padding_idx=0)
+            embedding_dim = self.embedding.embedding_dim
+        else:
+            self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
+
+        self.encoder = Encoder(embedding_dim, hidden_size)
+        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
+
+    def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor,
+                oov_size: int, outputs: Tensor = None) -> Tensor:
+        if self.training:
+            if outputs is None:
+                raise AttributeError('During training reference summaries must be provided.')
+        else:  # In validation phase never use passed summaries
+            outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
+                                 device=inputs.device)
+
+        inputs_embedded = self.embedding(inputs)
+        encoder_out, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
+
+        temporal_attention = None
+        previous_hidden = None
+        predictions = []
+        for i in range(outputs.shape[0]):
+            decoder_input = outputs[i, :]
+            if not self.training:  # Remove OOV tokens in validation phase
+                decoder_input[decoder_input >= self.vocab_size] = self.unk_index
+
+            decoder_input = self.embedding(decoder_input)
+            prediction, encoder_hidden, temporal_attention, previous_hidden = \
+                self.decoder(decoder_input, encoder_out, encoder_hidden, temporal_attention, previous_hidden,
+                             inputs_extended, oov_size)
+            predictions.append(prediction)
+
+            if not self.training and i + 1 < outputs.shape[0]:
+                outputs[i + 1, :] = torch.argmax(prediction, dim=1)
+
+        return torch.stack(predictions)
