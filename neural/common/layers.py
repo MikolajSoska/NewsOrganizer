@@ -113,6 +113,18 @@ class Multiply(nn.Module):
         return x_in * self.value
 
 
+class MatrixProduct(nn.Module):
+    @staticmethod
+    def forward(tensor_1: Tensor, tensor_2: Tensor) -> Tensor:
+        return torch.bmm(tensor_1, tensor_2)
+
+
+class Exponential(nn.Module):
+    @staticmethod
+    def forward(x_in: Tensor) -> Tensor:
+        return torch.exp(x_in)
+
+
 class Max(nn.Module):
     def __init__(self, dimension: int):
         super().__init__()
