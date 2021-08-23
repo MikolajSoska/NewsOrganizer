@@ -18,22 +18,11 @@ class Encoder(nn.Module):
             layers.Permute(1, 2, 0)
         )
 
-        self.reduce_hidden = nn.Sequential(
-            layers.View(1, -1, hidden_size * 2),
-            nn.Linear(hidden_size * 2, hidden_size),
-            nn.ReLU(),
-        )
-        self.reduce_cell = nn.Sequential(
-            layers.View(1, -1, hidden_size * 2),
-            nn.Linear(hidden_size * 2, hidden_size),
-            nn.ReLU(),
-        )
-
     def forward(self, inputs: Tensor, inputs_lengths: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         out, (hidden, cell) = self.lstm(inputs, inputs_lengths)
         out = self.features(out)
-        hidden = self.reduce_hidden(hidden)
-        cell = self.reduce_cell(cell)
+        hidden = hidden.view(-1, 2 * self.hidden_size)
+        cell = cell.view(-1, 2 * self.hidden_size)
 
         return out, (hidden, cell)
 
@@ -52,15 +41,49 @@ class IntraTemporalAttention(nn.Module):
             layers.Transpose(0, 1)
         )
 
-    def forward(self, outputs: Tensor, encoder_out: Tensor, temporal_scores: Tensor = None) -> Tuple[Tensor, Tensor]:
-        temporal_attention = self.attention(outputs, encoder_out)
-        if temporal_scores is not None:
-            attention = temporal_attention / temporal_scores
+    def forward(self, outputs_hidden: Tensor, encoder_out: Tensor,
+                temporal_scores_sum: Tensor = None) -> Tuple[Tensor, Tensor]:
+        outputs_hidden = torch.transpose(outputs_hidden, 0, 1)
+        temporal_attention = self.attention(outputs_hidden, encoder_out)
+        if temporal_scores_sum is not None:
+            attention = temporal_attention / temporal_scores_sum
+            temporal_scores_sum = temporal_attention + temporal_scores_sum
         else:
             attention = temporal_attention
+            temporal_scores_sum = temporal_attention
 
         attention = self.normalize(attention)
         encoder_out = torch.transpose(encoder_out, 1, 2)
         context = self.context(attention, encoder_out)
 
-        return context, temporal_attention
+        return context, temporal_scores_sum
+
+
+class IntraDecoderAttention(nn.Module):
+    def __init__(self, hidden_size: int):
+        super().__init__()
+        self.attention_first = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size, bias=False),
+            layers.Transpose(1, 2)
+        )
+        self.attention_second = layers.SequentialMultiInput(
+            layers.MatrixProduct(),
+            nn.Softmax(dim=-1)
+        )
+        self.context = layers.SequentialMultiInput(
+            layers.MatrixProduct(),
+            layers.Transpose(0, 1)
+        )
+
+    def forward(self, decoder_hidden: Tensor, previous_hidden: Tensor = None) -> Tuple[Tensor, Tensor]:
+        if previous_hidden is None:
+            context = torch.zeros_like(decoder_hidden)
+            return context, decoder_hidden
+
+        decoder_hidden = torch.transpose(decoder_hidden, 0, 1)
+        attention = self.attention_first(previous_hidden)
+        attention = self.attention_second(decoder_hidden, attention)
+        context = self.context(attention, previous_hidden)
+        previous_hidden = torch.cat((previous_hidden, decoder_hidden), dim=1)
+
+        return context, previous_hidden
