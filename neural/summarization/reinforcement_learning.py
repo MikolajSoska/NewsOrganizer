@@ -10,19 +10,19 @@ import neural.common.layers as layers
 class Encoder(nn.Module):
     def __init__(self, embedding_dim: int, hidden_size: int):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.lstm = layers.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size,
+        self.lstm = layers.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size // 2,
                                              bidirectional=True))
         self.features = nn.Sequential(
-            nn.Linear(2 * hidden_size, 2 * hidden_size, bias=False),
+            nn.Linear(hidden_size, hidden_size, bias=False),
             layers.Permute(1, 2, 0)
         )
+        self.transform_state = layers.View(-1, hidden_size)
 
     def forward(self, inputs: Tensor, inputs_lengths: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         out, (hidden, cell) = self.lstm(inputs, inputs_lengths)
         out = self.features(out)
-        hidden = hidden.view(-1, 2 * self.hidden_size)
-        cell = cell.view(-1, 2 * self.hidden_size)
+        hidden = self.transform_state(hidden)
+        cell = self.transform_state(cell)
 
         return out, (hidden, cell)
 
