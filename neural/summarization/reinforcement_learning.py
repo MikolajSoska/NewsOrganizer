@@ -165,32 +165,38 @@ class ReinforcementSummarization(nn.Module):
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor,
-                oov_size: int, outputs: Tensor = None) -> Tensor:
+                oov_size: int, outputs: Tensor = None, teacher_forcing_ratio: float = 1.0) -> Tensor:
+        device = inputs.device
         if self.training:
-            if outputs is None:
-                raise AttributeError('During training reference summaries must be provided.')
-        else:  # In validation phase never use passed summaries
+            if outputs is None and teacher_forcing_ratio > 0:
+                raise AttributeError('During training with teacher forcing reference summaries must be provided.')
+        else:  # In validation phase never use passed summaries (
             outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
-                                 device=inputs.device)
+                                 device=device)
+            teacher_forcing_ratio = 0.  # In validation phase teacher forcing is not used
 
+        outputs_length, batch_size = outputs.shape
         inputs_embedded = self.embedding(inputs)
         encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
 
         temporal_attention = None
         previous_hidden = None
         predictions = []
-        for i in range(outputs.shape[0]):
-            decoder_input = outputs[i, :]
-            if not self.training:  # Remove OOV tokens in validation phase
-                decoder_input[decoder_input >= self.vocab_size] = self.unk_index
-
+        decoder_input = outputs[0, :]
+        for i in range(outputs_length):
             decoder_input = self.embedding(decoder_input)
             prediction, encoder_hidden, temporal_attention, previous_hidden = \
                 self.decoder(decoder_input, encoder_out, encoder_features, encoder_hidden, temporal_attention,
                              previous_hidden, inputs_extended, oov_size)
             predictions.append(prediction)
 
-            if not self.training and i + 1 < outputs.shape[0]:
-                outputs[i + 1, :] = torch.argmax(prediction, dim=1)
+            if i + 1 < outputs_length:
+                use_predictions = torch.as_tensor(torch.rand(batch_size, device=device) >= teacher_forcing_ratio)
+                predicted_tokens = torch.argmax(prediction, dim=1)
+                predicted_tokens[predicted_tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
+                predicted_tokens = predicted_tokens.detach()
+                # Depending on the value of `use_predictions` in next step decoder will use predicted tokens or
+                # ground truth values (teacher forcing)
+                decoder_input = torch.where(use_predictions, predicted_tokens, outputs[i, :])
 
         return torch.stack(predictions)

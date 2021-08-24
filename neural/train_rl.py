@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--max-article-length', type=int, default=800, help='Articles will be truncated to this value')
     parser.add_argument('--max-summary-length', type=int, default=100, help='Summaries will be truncated to this value')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--teacher-forcing', type=float, default=0.75, help='Teacher forcing ratio')
     parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert', 'glove'], default='glove',
                         help='Which pretrained embeddings use')
     parser.add_argument('--embedding-size', type=int, default=100, help='Size of embeddings (if no pretrained')
@@ -43,7 +44,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     model = trainer.model.rl_model
 
     oov_size = len(max(oov_list, key=lambda x: len(x)))
-    predictions = model(texts, texts_lengths, texts_extended, oov_size, summaries)
+    predictions = model(texts, texts_lengths, texts_extended, oov_size, summaries, trainer.params.teacher_forcing_ratio)
     loss = trainer.criterion.nll(torch.flatten(predictions, end_dim=1), torch.flatten(targets))
 
     batch_size = targets.shape[1]
@@ -125,7 +126,8 @@ def main() -> None:
         load_checkpoint=args.load_checkpoint,
         validation_scores=[rouge],
         test_scores=[rouge, meteor],
-        vocab=vocab
+        vocab=vocab,
+        teacher_forcing_ratio=args.teacher_forcing
     )
     trainer.set_models(
         rl_model=model
