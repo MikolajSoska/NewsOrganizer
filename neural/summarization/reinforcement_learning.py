@@ -14,37 +14,41 @@ class Encoder(nn.Module):
                                              bidirectional=True))
         self.features = nn.Sequential(
             nn.Linear(hidden_size, hidden_size, bias=False),
-            layers.Permute(1, 2, 0)
         )
         self.transform_state = layers.View(-1, hidden_size)
 
-    def forward(self, inputs: Tensor, inputs_lengths: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
+    def forward(self, inputs: Tensor, inputs_lengths: Tensor) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor]]:
         out, (hidden, cell) = self.lstm(inputs, inputs_lengths)
-        out = self.features(out)
+        features = self.features(out)
         hidden = self.transform_state(hidden)
         cell = self.transform_state(cell)
 
-        return out, (hidden, cell)
+        return out, features, (hidden, cell)
 
 
 class IntraTemporalAttention(nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_size: int):
         super().__init__()
-        self.attention = layers.SequentialMultiInput(
-            layers.MatrixProduct(),
+        self.features = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+        )
+        self.attention = nn.Sequential(
+            nn.Tanh(),
+            nn.Linear(hidden_size, 1),
+            layers.Permute(1, 2, 0),
             layers.Exponential()
         )
-
         self.normalize = layers.Normalize(-1)
         self.context = layers.SequentialMultiInput(
             layers.MatrixProduct(),
             layers.Transpose(0, 1)
         )
 
-    def forward(self, outputs_hidden: Tensor, encoder_out: Tensor,
+    def forward(self, outputs_hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor,
                 temporal_scores_sum: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
-        outputs_hidden = torch.transpose(outputs_hidden, 0, 1)
-        temporal_attention = self.attention(outputs_hidden, encoder_out)
+        decoder_features = self.features(outputs_hidden)
+        temporal_attention = self.attention(decoder_features + encoder_features)
+
         if temporal_scores_sum is not None:
             attention = temporal_attention / temporal_scores_sum
             temporal_scores_sum = temporal_attention + temporal_scores_sum
@@ -53,7 +57,7 @@ class IntraTemporalAttention(nn.Module):
             temporal_scores_sum = temporal_attention
 
         attention = self.normalize(attention)
-        encoder_out = torch.transpose(encoder_out, 1, 2)
+        encoder_out = torch.transpose(encoder_out, 0, 1)
         context = self.context(attention, encoder_out)
 
         return context, attention, temporal_scores_sum
@@ -98,7 +102,7 @@ class Decoder(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
         super().__init__()
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
-        self.encoder_attention = IntraTemporalAttention()
+        self.encoder_attention = IntraTemporalAttention(hidden_size)
         self.decoder_attention = IntraDecoderAttention(hidden_size)
         self.vocab_distribution = layers.SequentialMultiInput(
             layers.Concatenate(-1),
@@ -117,13 +121,13 @@ class Decoder(nn.Module):
     def share_embedding_weights(self, weight: Tensor) -> None:
         self.vocab_distribution[3].weight = weight
 
-    def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_hidden: Tuple[Tensor],
+    def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_hidden: Tuple[Tensor],
                 temporal_scores_sum: Optional[Tensor], previous_hidden: Optional[Tensor], texts_extended: Tensor,
                 oov_size: int) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor, Tensor]:
         hidden, cell = self.lstm(outputs, encoder_hidden)
         decoder_hidden = torch.unsqueeze(hidden, 0)
         encoder_attention, temporal_attention, temporal_scores_sum = \
-            self.encoder_attention(decoder_hidden, encoder_out, temporal_scores_sum)
+            self.encoder_attention(decoder_hidden, encoder_out, encoder_features, temporal_scores_sum)
         decoder_attention, previous_hidden = self.decoder_attention(decoder_hidden, previous_hidden)
 
         vocab_distribution = self.vocab_distribution(decoder_hidden, encoder_attention, decoder_attention)
@@ -139,7 +143,7 @@ class Decoder(nn.Module):
 
         final_distribution = torch.scatter_add(vocab_distribution, 1, texts_extended.permute(1, 0), attention)
 
-        return final_distribution, (hidden, cell), temporal_attention, previous_hidden
+        return final_distribution, (hidden, cell), temporal_scores_sum, previous_hidden
 
 
 class ReinforcementSummarization(nn.Module):
@@ -174,7 +178,7 @@ class ReinforcementSummarization(nn.Module):
                                  device=inputs.device)
 
         inputs_embedded = self.embedding(inputs)
-        encoder_out, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
+        encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
 
         temporal_attention = None
         previous_hidden = None
@@ -186,8 +190,8 @@ class ReinforcementSummarization(nn.Module):
 
             decoder_input = self.embedding(decoder_input)
             prediction, encoder_hidden, temporal_attention, previous_hidden = \
-                self.decoder(decoder_input, encoder_out, encoder_hidden, temporal_attention, previous_hidden,
-                             inputs_extended, oov_size)
+                self.decoder(decoder_input, encoder_out, encoder_features, encoder_hidden, temporal_attention,
+                             previous_hidden, inputs_extended, oov_size)
             predictions.append(prediction)
 
             if not self.training and i + 1 < outputs.shape[0]:
