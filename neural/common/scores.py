@@ -39,6 +39,9 @@ class ScoreValue:
     def __len__(self) -> int:
         return len(self.__dict__)
 
+    def __getitem__(self, item: str) -> float:
+        return self.__dict__[item]
+
 
 class Scorer(ABC):
     @abstractmethod
