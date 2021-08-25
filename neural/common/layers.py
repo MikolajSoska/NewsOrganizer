@@ -58,7 +58,7 @@ class Permute(nn.Module):
 
 
 class Transpose(nn.Module):
-    def __init__(self, first_dimension: int, second_dimension):
+    def __init__(self, first_dimension: int, second_dimension: int):
         super().__init__()
         self.first_dimension = first_dimension
         self.second_dimension = second_dimension
@@ -73,11 +73,14 @@ class Squeeze(nn.Module):
         self.dimension = dimension
 
     def forward(self, x_in: Tensor) -> Tensor:
-        return x_in.squeeze(dim=self.dimension)
+        if self.dimension is not None:  # Can't passed None as dim to this method
+            return x_in.squeeze(dim=self.dimension)
+        else:
+            return x_in.squeeze()
 
 
 class Unsqueeze(nn.Module):
-    def __init__(self, dimension: int = None):
+    def __init__(self, dimension: int):
         super().__init__()
         self.dimension = dimension
 
