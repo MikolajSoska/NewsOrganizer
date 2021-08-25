@@ -1,9 +1,13 @@
 import abc
-from typing import Any
+from typing import List, Tuple, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torchtext.vocab import Vocab
+
+from neural.common.scores import ROUGE
+from neural.common.utils import add_words_to_vocab, remove_words_from_vocab
 
 
 class LossWithReduction(nn.Module, abc.ABC):
@@ -67,5 +71,33 @@ class LabelSmoothingCrossEntropy(LossWithReduction):
         encoding = torch.full_like(predictions_log, self.smoothing / (class_number - 1))
         encoding = torch.scatter(encoding, 1, targets.unsqueeze(1), self.confidence)
         loss = torch.sum(-encoding * predictions_log, dim=-1)
+
+        return self.reduction(loss)
+
+
+class PolicyLearning(LossWithReduction):
+    def __init__(self, vocab: Vocab, reduction: str = 'mean'):
+        super().__init__(reduction)
+        self.vocab = vocab
+        self.reward = ROUGE(vocab, 'rougeL')  # Use ROUGE-L score as reward function
+
+    def __compute_reward(self, predictions: Tensor, targets: Tensor, oov_list: Tuple[List[str]]) -> Tensor:
+        batch_size = targets.shape[1]
+        scores = []
+        # Due to different OOV words for each sequence in a batch, it has to scored separately
+        for i in range(batch_size):
+            add_words_to_vocab(self.vocab, oov_list[i])
+            prediction_tokens = predictions[:, i].unsqueeze(dim=1)
+            target_tokens = targets[:, i].unsqueeze(dim=1)
+            scores.append(self.reward.score(prediction_tokens, target_tokens)['ROUGE-L'])
+            remove_words_from_vocab(self.vocab, oov_list[i])
+
+        return torch.tensor(scores, device=predictions.device)
+
+    def forward(self, log_probabilities: Tensor, predicted_tokens: Tensor, baseline_tokens: Tensor,
+                targets: Tensor, oov_list: Tuple[List[str]]) -> Tensor:
+        predicted_reward = self.__compute_reward(predicted_tokens, targets, oov_list)
+        baseline_reward = self.__compute_reward(baseline_tokens, targets, oov_list)
+        loss = (baseline_reward - predicted_reward) * torch.sum(log_probabilities, dim=0)
 
         return self.reduction(loss)

@@ -30,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--max-summary-length', type=int, default=100, help='Summaries will be truncated to this value')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--teacher-forcing', type=float, default=0.75, help='Teacher forcing ratio')
+    parser.add_argument('--train-ml', action='store_true', help='Train using maximum likelihood')
+    parser.add_argument('--train-rl', action='store_true', help='Train using reinforcement learning')
     parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert', 'glove'], default='glove',
                         help='Which pretrained embeddings use')
     parser.add_argument('--embedding-size', type=int, default=100, help='Size of embeddings (if no pretrained')
@@ -42,21 +44,42 @@ def parse_args() -> argparse.Namespace:
 def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, ScoreValue]:
     texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list = inputs
     model = trainer.model.rl_model
-
+    teacher_forcing_ratio = trainer.params.teacher_forcing_ratio
     oov_size = len(max(oov_list, key=lambda x: len(x)))
-    predictions = model(texts, texts_lengths, texts_extended, oov_size, summaries, trainer.params.teacher_forcing_ratio)
-    loss = trainer.criterion.nll(torch.flatten(predictions, end_dim=1), torch.flatten(targets))
-
     batch_size = targets.shape[1]
     score = ScoreValue()
-    for i in range(batch_size):  # Due to different OOV words for each sequence in a batch, it has to scored separately
-        add_words_to_vocab(trainer.params.vocab, oov_list[i])
-        score_out = predictions[:, i, :].unsqueeze(dim=1)
-        score_target = targets[:, i].unsqueeze(dim=1)
-        score += trainer.score(score_out, score_target)
-        remove_words_from_vocab(trainer.params.vocab, oov_list[i])
 
-    del predictions
+    if trainer.params.train_ml or trainer.current_phase != 'train':  # During validation only use this approach
+        predictions, tokens = model(texts, texts_lengths, texts_extended, oov_size, summaries, teacher_forcing_ratio)
+        ml_loss = trainer.criterion.nll(torch.flatten(predictions, end_dim=1), torch.flatten(targets))
+
+        # Scoring is performed only in ML approach
+        # Due to different OOV words for each sequence in a batch, it has to scored separately
+        for i in range(batch_size):
+            utils.add_words_to_vocab(trainer.params.vocab, oov_list[i])
+            score_out = tokens[:, i].unsqueeze(dim=1)
+            score_target = targets[:, i].unsqueeze(dim=1)
+            score += trainer.score(score_out, score_target)
+            utils.remove_words_from_vocab(trainer.params.vocab, oov_list[i])
+
+        del predictions
+        del tokens
+    else:
+        ml_loss = 0
+
+    if trainer.params.train_rl and trainer.current_phase == 'train':  # Use RL only in training phase
+        log_probabilities, tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.,
+                                          train_rl=True)
+        with torch.no_grad():
+            _, baseline_tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.)
+        rl_loss = trainer.criterion.policy_loss(log_probabilities, tokens, baseline_tokens, targets, oov_list)
+        del log_probabilities
+        del baseline_tokens
+        del tokens
+    else:
+        rl_loss = 0
+
+    loss = ml_loss + rl_loss
 
     return loss, score / batch_size
 
@@ -69,6 +92,7 @@ def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: 
 
 def main() -> None:
     args = parse_args()
+    assert args.train_ml or args.train_rl, 'At least one training method need to be specified'
     utils.set_random_seed(args.seed)
     model_name = 'reinforcement_learning'
     utils.dump_args_to_file(args, args.model_path / model_name)
@@ -115,13 +139,16 @@ def main() -> None:
         validation_scores=[rouge],
         test_scores=[rouge, meteor],
         vocab=vocab,
-        teacher_forcing_ratio=args.teacher_forcing
+        teacher_forcing_ratio=args.teacher_forcing,
+        train_ml=args.train_ml,
+        train_rl=args.train_rl
     )
     trainer.set_models(
         rl_model=model
     )
     trainer.set_criterion(
         nll=nn.NLLLoss(),
+        policy_loss=PolicyLearning(vocab)
     )
     trainer.set_optimizer(
         adam=torch.optim.Adam(model.parameters(), lr=args.lr)

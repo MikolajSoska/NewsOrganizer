@@ -3,6 +3,7 @@ from typing import Tuple, Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.distributions import Categorical
 
 import neural.common.layers as layers
 
@@ -164,17 +165,27 @@ class ReinforcementSummarization(nn.Module):
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
 
-    def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor,
-                oov_size: int, outputs: Tensor = None, teacher_forcing_ratio: float = 1.0) -> Tensor:
+    def __validate_outputs(self, inputs: Tensor, outputs: Optional[Tensor],
+                           teacher_forcing_ratio: float) -> Tuple[Tensor, float]:
         device = inputs.device
         if self.training:
-            if outputs is None and teacher_forcing_ratio > 0:
-                raise AttributeError('During training with teacher forcing reference summaries must be provided.')
+            if outputs is None:
+                if teacher_forcing_ratio > 0:
+                    raise AttributeError('During training with teacher forcing reference summaries must be provided.')
+                else:
+                    outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
+                                         device=device)
         else:  # In validation phase never use passed summaries (
             outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
                                  device=device)
             teacher_forcing_ratio = 0.  # In validation phase teacher forcing is not used
 
+        return outputs, teacher_forcing_ratio
+
+    def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
+                outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,
+                train_rl: bool = False) -> Tuple[Tensor, Tensor]:
+        outputs, teacher_forcing_ratio = self.__validate_outputs(inputs, outputs, teacher_forcing_ratio)
         outputs_length, batch_size = outputs.shape
         inputs_embedded = self.embedding(inputs)
         encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
@@ -182,6 +193,8 @@ class ReinforcementSummarization(nn.Module):
         temporal_attention = None
         previous_hidden = None
         predictions = []
+        predicted_tokens = []
+        log_probabilities = []  # Only used in RL training
         decoder_input = outputs[0, :]
         for i in range(outputs_length):
             decoder_input = self.embedding(decoder_input)
@@ -190,13 +203,25 @@ class ReinforcementSummarization(nn.Module):
                              previous_hidden, inputs_extended, oov_size)
             predictions.append(prediction)
 
+            if train_rl:  # In RL training draw tokens from categorical distribution
+                distribution = Categorical(prediction)
+                tokens = distribution.sample()
+                tokens[tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
+                log_probabilities.append(distribution.log_prob(tokens))
+            else:  # Use simple greed approach
+                tokens = torch.argmax(prediction, dim=1)
+                tokens[tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
+
+            tokens = tokens.detach()
+            predicted_tokens.append(tokens)
+
             if i + 1 < outputs_length:
-                use_predictions = torch.as_tensor(torch.rand(batch_size, device=device) >= teacher_forcing_ratio)
-                predicted_tokens = torch.argmax(prediction, dim=1)
-                predicted_tokens[predicted_tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
-                predicted_tokens = predicted_tokens.detach()
+                use_predictions = torch.as_tensor(torch.rand(batch_size, device=inputs.device) >= teacher_forcing_ratio)
                 # Depending on the value of `use_predictions` in next step decoder will use predicted tokens or
                 # ground truth values (teacher forcing)
-                decoder_input = torch.where(use_predictions, predicted_tokens, outputs[i, :])
+                decoder_input = torch.where(use_predictions, tokens, outputs[i, :])
 
-        return torch.stack(predictions)
+        if train_rl:  # Return log probabilities used in RL loss function
+            return torch.stack(log_probabilities), torch.stack(predicted_tokens)
+        else:
+            return torch.stack(predictions), torch.stack(predicted_tokens)
