@@ -101,3 +101,12 @@ class PolicyLearning(LossWithReduction):
         loss = (baseline_reward - predicted_reward) * torch.sum(log_probabilities, dim=0)
 
         return self.reduction(loss)
+
+
+class MixedRLLoss(nn.Module):
+    def __init__(self, gamma: float):
+        super().__init__()
+        self.gamma = gamma
+
+    def forward(self, ml_loss: Tensor, rl_loss: Tensor) -> Tensor:
+        return self.gamma * rl_loss + (1 - self.gamma) * ml_loss

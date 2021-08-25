@@ -12,7 +12,7 @@ import neural.common.scores as scores
 import neural.common.utils as utils
 from neural.common.data.embeddings import CollobertEmbeddings
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
-from neural.common.losses import PolicyLearning
+from neural.common.losses import PolicyLearning, MixedRLLoss
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--max-summary-length', type=int, default=100, help='Summaries will be truncated to this value')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--teacher-forcing', type=float, default=0.75, help='Teacher forcing ratio')
+    parser.add_argument('--gamma', type=float, default=0.9984, help='Scaling factor to mixed objective loss')
     parser.add_argument('--train-ml', action='store_true', help='Train using maximum likelihood')
     parser.add_argument('--train-rl', action='store_true', help='Train using reinforcement learning')
     parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert', 'glove'], default='glove',
@@ -79,7 +80,10 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     else:
         rl_loss = 0
 
-    loss = ml_loss + rl_loss
+    if trainer.params.train_ml and trainer.params.train_rl:
+        loss = trainer.criterion.mixed_loss(ml_loss, rl_loss)
+    else:
+        loss = ml_loss + rl_loss
 
     return loss, score / batch_size
 
@@ -148,7 +152,8 @@ def main() -> None:
     )
     trainer.set_criterion(
         nll=nn.NLLLoss(),
-        policy_loss=PolicyLearning(vocab)
+        policy_loss=PolicyLearning(vocab),
+        mixed_loss=MixedRLLoss(args.gamma)
     )
     trainer.set_optimizer(
         adam=torch.optim.Adam(model.parameters(), lr=args.lr)
