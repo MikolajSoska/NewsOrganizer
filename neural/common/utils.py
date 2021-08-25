@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import Callable, Any
+from typing import List, Callable, Any
 
 import numpy as np
 import torch
@@ -57,6 +57,18 @@ def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
         tokens.append(token)
 
     return ' '.join(tokens)
+
+
+def add_words_to_vocab(vocab: Vocab, words: List[str]) -> None:
+    for word in words:
+        vocab.itos.append(word)
+        vocab.stoi[word] = len(vocab.itos)
+
+
+def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
+    for word in words:
+        del vocab.itos[-1]
+        del vocab.stoi[word]
 
 
 def dump_args_to_file(args: argparse.Namespace, filepath: Path) -> None:

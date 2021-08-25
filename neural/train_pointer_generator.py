@@ -1,17 +1,16 @@
 import argparse
 from functools import partial
-from typing import List, Tuple, Any
+from typing import Tuple, Any
 
 import torch
 from torch import Tensor
-from torchtext.vocab import Vocab
 
 import neural.common.scores as scores
+import neural.common.utils as utils
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
 from neural.common.losses import SummarizationLoss, CoverageLoss
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
-from neural.common.utils import set_random_seed, dump_args_to_file
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
 from neural.summarization.pointer_generator import PointerGeneratorNetwork
 
@@ -54,11 +53,11 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     batch_size = targets.shape[1]
     score = ScoreValue()
     for i in range(batch_size):  # Due to different OOV words for each sequence in a batch, it has to scored separately
-        add_words_to_vocab(trainer.params.vocab, oov_list[i])
+        utils.add_words_to_vocab(trainer.params.vocab, oov_list[i])
         score_out = output[:, i, :].unsqueeze(dim=1)
         score_target = targets[:, i].unsqueeze(dim=1)
         score += trainer.score(score_out, score_target)
-        remove_words_from_vocab(trainer.params.vocab, oov_list[i])
+        utils.remove_words_from_vocab(trainer.params.vocab, oov_list[i])
 
     del output
     del attention
@@ -67,27 +66,15 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score / batch_size
 
 
-def add_words_to_vocab(vocab: Vocab, words: List[str]) -> None:
-    for word in words:
-        vocab.itos.append(word)
-        vocab.stoi[word] = len(vocab.itos)
-
-
-def remove_words_from_vocab(vocab: Vocab, words: List[str]) -> None:
-    for word in words:
-        del vocab.itos[-1]
-        del vocab.stoi[word]
-
-
 def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int) -> PointerGeneratorNetwork:
     return PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index, unk_index)
 
 
 def main() -> None:
     args = parse_args()
-    set_random_seed(args.seed)
+    utils.set_random_seed(args.seed)
     model_name = 'pointer_generator'
-    dump_args_to_file(args, args.model_path / model_name)
+    utils.dump_args_to_file(args, args.model_path / model_name)
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
                                      vocab_dir=args.vocab_path)
