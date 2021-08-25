@@ -22,13 +22,15 @@ from neural.summarization.reinforcement_learning import ReinforcementSummarizati
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for ML+RL model training.')
     parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
-    parser.add_argument('--epochs', type=int, default=13, help='Training epochs')
+    parser.add_argument('--epochs', type=int, default=30, help='Training epochs')
     parser.add_argument('--batch', type=int, default=8, help='Batch size')
     parser.add_argument('--vocab-size', type=int, default=50000, help='Vocabulary size')
     parser.add_argument('--hidden-size', type=int, default=400, help='Hidden dimension size')
     parser.add_argument('--max-article-length', type=int, default=800, help='Articles will be truncated to this value')
     parser.add_argument('--max-summary-length', type=int, default=100, help='Summaries will be truncated to this value')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--pretrain-epochs', type=int, default=15, help='Pretraining (only ML train) epochs number')
+    parser.add_argument('--pretrain-lr', type=float, default=0.001, help='Learning rate during pretraining phase')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--teacher-forcing', type=float, default=0.75, help='Teacher forcing ratio')
     parser.add_argument('--gamma', type=float, default=0.9984, help='Scaling factor to mixed objective loss')
     parser.add_argument('--train-ml', action='store_true', help='Train using maximum likelihood')
@@ -44,6 +46,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, ScoreValue]:
+    __update_training_phase(trainer)
     texts, texts_lengths, summaries, summaries_lengths, texts_extended, targets, oov_list = inputs
     model = trainer.model.rl_model
     teacher_forcing_ratio = trainer.params.teacher_forcing_ratio
@@ -51,7 +54,14 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     batch_size = targets.shape[1]
     score = ScoreValue()
 
-    if trainer.params.train_ml or trainer.current_phase != 'train':  # During validation only use this approach
+    if trainer.params.pretrain:  # Pretraining is performed only with ML training
+        train_ml = True
+        train_rl = False
+    else:  # During normal phase use config from path args
+        train_ml = trainer.params.train_ml
+        train_rl = trainer.params.train_rl
+
+    if train_ml or trainer.current_phase != 'train':  # During validation only use this approach
         predictions, tokens = model(texts, texts_lengths, texts_extended, oov_size, summaries, teacher_forcing_ratio)
         ml_loss = trainer.criterion.nll(torch.flatten(predictions, end_dim=1), torch.flatten(targets))
 
@@ -69,7 +79,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     else:
         ml_loss = 0
 
-    if trainer.params.train_rl and trainer.current_phase == 'train':  # Use RL only in training phase
+    if train_rl and trainer.current_phase == 'train':  # Use RL only in training phase
         log_probabilities, tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.,
                                           train_rl=True)
         with torch.no_grad():
@@ -81,12 +91,21 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     else:
         rl_loss = 0
 
-    if trainer.params.train_ml and trainer.params.train_rl:
+    if train_ml and train_rl:
         loss = trainer.criterion.mixed_loss(ml_loss, rl_loss)
     else:
         loss = ml_loss + rl_loss
 
     return loss, score / batch_size
+
+
+def __update_training_phase(trainer: Trainer) -> None:
+    if trainer.params.pretrain and trainer.current_epoch >= trainer.params.pretrain_epochs:
+        trainer.logger.info(f'Epoch {trainer.current_epoch}. Ending pretraining.')
+        trainer.params.pretrain = False  # Start normal training
+        optimizer = trainer.optimizer.adam
+        for params in optimizer.param_groups:  # Update learning rate
+            params['lr'] = trainer.params.normal_lr
 
 
 def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int,
@@ -146,7 +165,10 @@ def main() -> None:
         vocab=vocab,
         teacher_forcing_ratio=args.teacher_forcing,
         train_ml=args.train_ml,
-        train_rl=args.train_rl
+        train_rl=args.train_rl,
+        normal_lr=args.lr,
+        pretrain=True,
+        pretrain_epochs=args.pretrain_epochs
     )
     trainer.set_models(
         rl_model=model
@@ -157,7 +179,7 @@ def main() -> None:
         mixed_loss=MixedRLLoss(args.gamma)
     )
     trainer.set_optimizer(
-        adam=torch.optim.Adam(model.parameters(), lr=args.lr)
+        adam=torch.optim.Adam(model.parameters(), lr=args.pretrain_lr)  # Start optimizer with pretrain LR
     )
     trainer.train(train_loader, validation_loader)
     trainer.eval(test_loader)
