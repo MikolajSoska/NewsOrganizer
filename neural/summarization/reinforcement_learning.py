@@ -100,22 +100,28 @@ class IntraDecoderAttention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, use_intra_attention: bool):
         super().__init__()
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
         self.encoder_attention = IntraTemporalAttention(hidden_size)
-        self.decoder_attention = IntraDecoderAttention(hidden_size)
+        if use_intra_attention:
+            self.decoder_attention = IntraDecoderAttention(hidden_size)
+            hidden_multiplier = 3
+        else:
+            self.decoder_attention = None
+            hidden_multiplier = 2
+
         self.vocab_distribution = layers.SequentialMultiInput(
             layers.Concatenate(-1),
             layers.Squeeze(0),
-            nn.Linear(3 * hidden_size, embedding_dim, bias=False),
+            nn.Linear(hidden_multiplier * hidden_size, embedding_dim, bias=False),
             nn.Linear(embedding_dim, vocab_size),
             nn.Softmax(dim=1)
         )
         self.pointer_probability = layers.SequentialMultiInput(
             layers.Concatenate(-1),
             layers.Squeeze(0),
-            nn.Linear(3 * hidden_size, 1),
+            nn.Linear(hidden_multiplier * hidden_size, 1),
             nn.Sigmoid()
         )
 
@@ -126,10 +132,15 @@ class Decoder(nn.Module):
         decoder_hidden = torch.unsqueeze(hidden, 0)
         encoder_attention, temporal_attention, temporal_scores_sum = \
             self.encoder_attention(decoder_hidden, encoder_out, encoder_features, temporal_scores_sum)
-        decoder_attention, previous_hidden = self.decoder_attention(decoder_hidden, previous_hidden)
 
-        vocab_distribution = self.vocab_distribution(decoder_hidden, encoder_attention, decoder_attention)
-        pointer_probability = self.pointer_probability(decoder_hidden, encoder_attention, decoder_attention)
+        if self.decoder_attention is not None:
+            decoder_attention, previous_hidden = self.decoder_attention(decoder_hidden, previous_hidden)
+            vocab_distribution = self.vocab_distribution(decoder_hidden, encoder_attention, decoder_attention)
+            pointer_probability = self.pointer_probability(decoder_hidden, encoder_attention, decoder_attention)
+        else:
+            vocab_distribution = self.vocab_distribution(decoder_hidden, encoder_attention)
+            pointer_probability = self.pointer_probability(decoder_hidden, encoder_attention)
+
         vocab_distribution = (1 - pointer_probability) * vocab_distribution
         attention = pointer_probability * temporal_attention.squeeze()
 
@@ -146,7 +157,7 @@ class Decoder(nn.Module):
 
 class ReinforcementSummarization(nn.Module):
     def __init__(self, vocab_size: int, hidden_size: int, max_summary_length: int, bos_index: int, unk_index: int,
-                 embedding_dim: int = None, embeddings: Tensor = None):
+                 embedding_dim: int = None, embeddings: Tensor = None, use_intra_attention: bool = True):
         if embeddings is None and embedding_dim is None:
             raise ValueError('Either embeddings vector or embedding dim must be passed.')
 
@@ -163,7 +174,7 @@ class ReinforcementSummarization(nn.Module):
             self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
 
         self.encoder = Encoder(embedding_dim, hidden_size)
-        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
+        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size, use_intra_attention)
 
     def __validate_outputs(self, inputs: Tensor, outputs: Optional[Tensor],
                            teacher_forcing_ratio: float) -> Tuple[Tensor, float]:

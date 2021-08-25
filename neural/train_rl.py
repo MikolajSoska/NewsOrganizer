@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--gamma', type=float, default=0.9984, help='Scaling factor to mixed objective loss')
     parser.add_argument('--train-ml', action='store_true', help='Train using maximum likelihood')
     parser.add_argument('--train-rl', action='store_true', help='Train using reinforcement learning')
+    parser.add_argument('--intra-attention', action='store_true', help='Use decoder intra-attention in training')
     parser.add_argument('--pretrained-embeddings', choices=['no', 'collobert', 'glove'], default='glove',
                         help='Which pretrained embeddings use')
     parser.add_argument('--embedding-size', type=int, default=100, help='Size of embeddings (if no pretrained')
@@ -91,7 +92,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
 def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int,
                            embeddings: Tensor = None) -> ReinforcementSummarization:
     return ReinforcementSummarization(args.vocab_size + len(SpecialTokens), args.hidden_size, args.max_summary_length,
-                                      bos_index, unk_index, args.embedding_size, embeddings)
+                                      bos_index, unk_index, args.embedding_size, embeddings, args.intra_attention)
 
 
 def main() -> None:
