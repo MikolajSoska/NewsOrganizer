@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.layers.decode import CRF
 
 
 class BiLSTMCRF(nn.Module):
@@ -38,7 +39,7 @@ class BiLSTMCRF(nn.Module):
         self.word_lstm = nn.LSTM(input_size=word_embedding_dim + char_hidden_size, hidden_size=word_hidden_size // 2,
                                  bidirectional=True)
         self.out = nn.Linear(word_hidden_size, output_size)
-        self.crf = layers.CRF(output_size)
+        self.crf = CRF(output_size)
 
     @staticmethod
     def __init_hidden(hidden_dim: int, batch_size: int, device: str) -> Tuple[Tensor, Tensor]:
