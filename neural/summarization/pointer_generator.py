@@ -142,8 +142,8 @@ class Decoder(nn.Module):
 
 
 class PointerGeneratorNetwork(nn.Module):
-    def __init__(self, vocab_size: int, bos_index: int, unk_index: int, embedding_dim: int = 128,
-                 hidden_size: int = 256, max_summary_length: int = 100):
+    def __init__(self, vocab_size: int, bos_index: int, unk_index: int, embedding_dim: int, hidden_size: int,
+                 max_summary_length: int):
         super().__init__()
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size

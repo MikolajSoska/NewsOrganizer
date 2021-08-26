@@ -21,9 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--epochs', type=int, default=13, help='Training epochs')
     parser.add_argument('--batch', type=int, default=8, help='Batch size')
     parser.add_argument('--vocab-size', type=int, default=50000, help='Vocabulary size')
+    parser.add_argument('--embedding-size', type=int, default=128, help='Size of word embeddings')
+    parser.add_argument('--hidden-size', type=int, default=256, help='Size of hidden dim in LSTM layers')
     parser.add_argument('--max-article-length', type=int, default=400, help='Articles will be truncated to this value')
     parser.add_argument('--max-summary-length', type=int, default=100, help='Summaries will be truncated to this value')
-    parser.add_argument('--coverage', type=int, default=48000, help='Number of iteration with coverage')
+    parser.add_argument('--coverage-iter', type=int, default=48000, help='Number of iteration with coverage')
+    parser.add_argument('--coverage-lambda', type=float, default=1, help='Weight value for coverage loss')
     parser.add_argument('--lr', type=float, default=0.15, help='Learning rate')
     parser.add_argument('--init_acc_value', type=float, default=0.1, help='Initial accumulator value for Adagrad')
     parser.add_argument('--max-gradient-norm', type=int, default=2, help='Max norm for gradient clipping')
@@ -67,7 +70,13 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
 
 
 def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int) -> PointerGeneratorNetwork:
-    return PointerGeneratorNetwork(args.vocab_size + len(SpecialTokens), bos_index, unk_index)
+    return PointerGeneratorNetwork(
+        vocab_size=args.vocab_size + len(SpecialTokens),
+        bos_index=bos_index, unk_index=unk_index,
+        embedding_dim=args.embedding_size,
+        hidden_size=args.hidden_size,
+        max_summary_length=args.max_summary_length
+    )
 
 
 def main() -> None:
@@ -91,7 +100,7 @@ def main() -> None:
     test_loader = dataloader(test_dataset)
 
     model = create_model_from_args(args, bos_index=vocab.stoi[SpecialTokens.BOS.value], unk_index=vocab.unk_index)
-    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage
+    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage_iter
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 
@@ -114,7 +123,7 @@ def main() -> None:
     )
     trainer.set_criterion(
         summarization=SummarizationLoss(),
-        coverage=CoverageLoss()
+        coverage=CoverageLoss(args.coverage_lambda)
     )
     trainer.set_optimizer(
         adagrad=torch.optim.Adagrad(model.parameters(), lr=args.lr, initial_accumulator_value=args.init_acc_value)
