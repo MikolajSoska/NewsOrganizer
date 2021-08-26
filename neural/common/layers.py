@@ -88,6 +88,12 @@ class Unsqueeze(nn.Module):
         return x_in.unsqueeze(dim=self.dimension)
 
 
+class Contiguous(nn.Module):
+    @staticmethod
+    def forward(tensor: Tensor) -> Tensor:
+        return tensor.contiguous()
+
+
 class Concatenate(nn.Module):
     def __init__(self, dimension: int):
         super().__init__()
