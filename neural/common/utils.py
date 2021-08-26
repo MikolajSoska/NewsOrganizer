@@ -4,7 +4,6 @@ import random
 from pathlib import Path
 from typing import List, Tuple, Callable, Any
 
-import numpy as np
 import torch
 from torch import Tensor
 from torchtext.vocab import Vocab
@@ -20,7 +19,6 @@ class JSONPathEncoder(json.JSONEncoder):
 
 def set_random_seed(seed: int) -> None:
     torch.manual_seed(seed)
-    np.random.seed(seed)
     random.seed(seed)
 
 
