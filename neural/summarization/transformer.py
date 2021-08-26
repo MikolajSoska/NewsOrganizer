@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
 
     @staticmethod
     def __get_encoding_features(embedding_dim: int) -> nn.Parameter:
-        exponent = 2 * torch.arange(embedding_dim) / embedding_dim
+        exponent = 2 * (torch.arange(embedding_dim) // 2) / embedding_dim
         encoding_features = torch.full_like(exponent, 1. / 10000)
         encoding_features = torch.pow(encoding_features, exponent)
         encoding_features = torch.unsqueeze(encoding_features, dim=0)
