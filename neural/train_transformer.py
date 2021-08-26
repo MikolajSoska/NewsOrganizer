@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate')
     parser.add_argument('--warmup-steps', type=int, default=256000, help='Number of warmup steps in LR scheduling')
     parser.add_argument('--adam-betas', type=float, default=[0.9, 0.98], nargs=2, help='Betas for Adam optimizer')
-    parser.add_argument('--adam-eps', type=float, default=10e-9, help='Epsilon value for Adam optimizer')
+    parser.add_argument('--adam-eps', type=float, default=1e-9, help='Epsilon value for Adam optimizer')
     parser.add_argument('--label-smoothing', type=float, default=0.1, help='Label smoothing value')
 
     parser = add_base_train_args(parser)
