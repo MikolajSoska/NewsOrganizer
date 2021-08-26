@@ -4,6 +4,7 @@ from typing import List, Tuple, Any
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn.functional import nll_loss
 from torchtext.vocab import Vocab
 
 from neural.common.scores import ROUGE
@@ -71,6 +72,20 @@ class LabelSmoothingCrossEntropy(LossWithReduction):
         encoding = torch.full_like(predictions_log, self.smoothing / (class_number - 1))
         encoding = torch.scatter(encoding, 1, targets.unsqueeze(1), self.confidence)
         loss = torch.sum(-encoding * predictions_log, dim=-1)
+
+        return self.reduction(loss)
+
+
+class MLLoss(LossWithReduction):
+    def __init__(self, reduction: str = 'mean'):
+        super().__init__(reduction)
+
+    def forward(self, predictions: Tensor, targets: Tensor, target_lengths: Tensor) -> Tensor:
+        predictions = torch.transpose(predictions, 1, 2)
+        padding_mask = torch.clip(targets, min=0, max=1)
+        log_probabilities = torch.log(predictions + 1e-4)  # Add small constant to prevent infinity from log(0)
+        loss = nll_loss(log_probabilities, targets, reduction='none')
+        loss = torch.sum(loss * padding_mask, dim=0) / target_lengths
 
         return self.reduction(loss)
 

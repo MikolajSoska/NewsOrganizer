@@ -35,7 +35,7 @@ class IntraTemporalAttention(nn.Module):
         )
         self.attention = nn.Sequential(
             nn.Tanh(),
-            nn.Linear(hidden_size, 1),
+            nn.Linear(hidden_size, 1, bias=False),
             layers.Permute(1, 2, 0),
             layers.Exponential()
         )
@@ -125,9 +125,10 @@ class Decoder(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_hidden: Tuple[Tensor],
-                temporal_scores_sum: Optional[Tensor], previous_hidden: Optional[Tensor], texts_extended: Tensor,
-                oov_size: int) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor, Tensor]:
+    def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_features: Tensor,
+                encoder_hidden: Tuple[Tensor, Tensor], temporal_scores_sum: Optional[Tensor],
+                previous_hidden: Optional[Tensor],
+                texts_extended: Tensor, oov_size: int) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor, Tensor]:
         hidden, cell = self.lstm(outputs, encoder_hidden)
         decoder_hidden = torch.unsqueeze(hidden, 0)
         encoder_attention, temporal_attention, temporal_scores_sum = \
@@ -146,9 +147,8 @@ class Decoder(nn.Module):
 
         if oov_size > 0:  # Add distribution for OOV words (with 0 value) to match dims
             batch_size = vocab_distribution.shape[0]
-            device = vocab_distribution.device
-            vocab_distribution = torch.cat((vocab_distribution, torch.zeros((batch_size, oov_size),
-                                                                            device=device)), dim=1)
+            oov_zeros = torch.zeros((batch_size, oov_size), device=vocab_distribution.device)
+            vocab_distribution = torch.cat((vocab_distribution, oov_zeros), dim=1)
 
         final_distribution = torch.scatter_add(vocab_distribution, 1, texts_extended.permute(1, 0), attention)
 

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Tuple, Any
 
 import torch
-import torch.nn as nn
 from torch import Tensor
 from torchtext.vocab import GloVe
 
@@ -12,7 +11,7 @@ import neural.common.scores as scores
 import neural.common.utils as utils
 from neural.common.data.embeddings import CollobertEmbeddings
 from neural.common.data.vocab import SpecialTokens, VocabBuilder
-from neural.common.losses import PolicyLearning, MixedRLLoss
+from neural.common.losses import MLLoss, PolicyLearning, MixedRLLoss
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
 from neural.summarization.dataloader import SummarizationDataset, SummarizationDataLoader
@@ -63,7 +62,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
 
     if train_ml or trainer.current_phase != 'train':  # During validation only use this approach
         predictions, tokens = model(texts, texts_lengths, texts_extended, oov_size, summaries, teacher_forcing_ratio)
-        ml_loss = trainer.criterion.nll(torch.flatten(predictions, end_dim=1), torch.flatten(targets))
+        ml_loss = trainer.criterion.ml_loss(predictions, targets, summaries_lengths)
 
         # Scoring is performed only in ML approach
         # Due to different OOV words for each sequence in a batch, it has to scored separately
@@ -84,7 +83,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
                                           train_rl=True)
         with torch.no_grad():
             _, baseline_tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.)
-        rl_loss = trainer.criterion.policy_loss(log_probabilities, tokens, baseline_tokens, targets, oov_list)
+        rl_loss = trainer.criterion.rl_loss(log_probabilities, tokens, baseline_tokens, targets, oov_list)
         del log_probabilities
         del baseline_tokens
         del tokens
@@ -174,8 +173,8 @@ def main() -> None:
         rl_model=model
     )
     trainer.set_criterion(
-        nll=nn.NLLLoss(),
-        policy_loss=PolicyLearning(vocab),
+        ml_loss=MLLoss(),
+        rl_loss=PolicyLearning(vocab),
         mixed_loss=MixedRLLoss(args.gamma)
     )
     trainer.set_optimizer(
