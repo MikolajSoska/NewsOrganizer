@@ -126,7 +126,7 @@ def main() -> None:
     dataset = partial(SummarizationDataset, args.dataset, max_article_length=args.max_article_length,
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
                       data_dir=args.data_path)
-    dataloader = partial(SummarizationDataLoader, batch_size=args.batch, get_oov=True)
+    dataloader = partial(SummarizationDataLoader, batch_size=args.batch)
 
     if args.pretrained_embeddings == 'collobert':
         vectors = CollobertEmbeddings(args.embedding_path)

@@ -81,7 +81,7 @@ def main() -> None:
     dataset = partial(SummarizationDataset, args.dataset, max_article_length=args.max_article_length,
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=False,
                       data_dir=args.data_path)
-    dataloader = partial(SummarizationDataLoader, batch_size=args.batch, get_oov=False)
+    dataloader = partial(SummarizationDataLoader, batch_size=args.batch)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')

@@ -11,7 +11,8 @@ from rouge_score import rouge_scorer
 from torch import Tensor
 from torchtext.vocab import Vocab
 
-from neural.common.utils import tensor_to_string
+import neural.common.utils as utils
+from neural.common.data.vocab import SpecialTokens
 
 
 class ScoreValue:
@@ -105,14 +106,21 @@ class ROUGE(Scorer):
         self.vocab = vocab
         self.score_types = score_types
         self.scorer = rouge_scorer.RougeScorer(score_types, use_stemmer=False)
+        self.eos_index = vocab.stoi[SpecialTokens.EOS.value]
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = self._get_labels(predictions)
         scores = dict.fromkeys(self.score_types, 0)
         batch_size = labels.shape[1]
+        labels = utils.clean_predicted_tokens(labels, self.eos_index)
         for i in range(batch_size):
-            hypothesis = tensor_to_string(self.vocab, labels[:, i])
-            reference = tensor_to_string(self.vocab, target[:, i])
+            hypothesis = labels[:, i]
+            reference = target[:, i]
+            hypothesis, reference = utils.remove_unnecessary_padding(hypothesis, reference)
+
+            hypothesis = utils.tensor_to_string(self.vocab, hypothesis)
+            reference = utils.tensor_to_string(self.vocab, reference)
+
             rouge = self.scorer.score(hypothesis, reference)
             for name, value in rouge.items():
                 scores[name] += value.fmeasure
@@ -124,14 +132,20 @@ class ROUGE(Scorer):
 class METEOR(Scorer):  # TODO add exact match METEOR
     def __init__(self, vocab: Vocab):
         self.vocab = vocab
+        self.eos_index = vocab.stoi[SpecialTokens.EOS.value]
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = self._get_labels(predictions)
         batch_size = labels.shape[1]
         meteor = 0
+        labels = utils.clean_predicted_tokens(labels, self.eos_index)
         for i in range(batch_size):
-            hypothesis = tensor_to_string(self.vocab, labels[:, i])
-            reference = tensor_to_string(self.vocab, target[:, i])
+            hypothesis = labels[:, i]
+            reference = target[:, i]
+            hypothesis, reference = utils.remove_unnecessary_padding(hypothesis, reference)
+
+            hypothesis = utils.tensor_to_string(self.vocab, hypothesis)
+            reference = utils.tensor_to_string(self.vocab, reference)
             meteor += meteor_score.single_meteor_score(reference, hypothesis)
 
         meteor = meteor / batch_size

@@ -17,11 +17,11 @@ class SummarizationDataset(Dataset):
                  get_oov: bool = False, data_dir: Union[Path, str] = '../data/saved/datasets'):
         if isinstance(data_dir, str):
             data_dir = Path(data_dir)
+        self.get_oov = get_oov
+        self.max_article_length = max_article_length
+        self.max_summary_length = max_summary_length
         self.__vocab = vocab
-        self.__get_oov = get_oov
         self.__dataset = self.__build_dataset(dataset_name, split, data_dir)
-        self.__max_article_length = max_article_length
-        self.__max_summary_length = max_summary_length
 
     def __build_dataset(self, dataset_name: str, split: str, data_dir: Path) -> List[Tuple[Tensor, Tensor, List[str]]]:
         dataset_path = data_dir / f'dataset-{split}-summarization-{dataset_name}-vocab-' \
@@ -67,15 +67,15 @@ class SummarizationDataset(Dataset):
 
     def __getitem__(self, index: int) -> T_co:
         text, summary, oov_list = self.__dataset[index]
-        text = text[:self.__max_article_length]
+        text = text[:self.max_article_length]
         target = summary[1:]  # Without BOS token
-        if len(summary) > self.__max_summary_length:
-            summary = summary[:self.__max_summary_length]
-            target = target[:self.__max_summary_length]
+        if len(summary) > self.max_summary_length:
+            summary = summary[:self.max_summary_length]
+            target = target[:self.max_summary_length]
         else:
             summary = summary[:-1]  # Remove EOS token
 
-        if self.__get_oov:
+        if self.get_oov:
             text_without_oov = self.remove_oov_words(text, self.__vocab)
             summary_without_oov = torch.clone(summary)
             summary_without_oov[summary >= len(self.__vocab)] = self.__vocab.unk_index
@@ -91,9 +91,10 @@ class SummarizationDataset(Dataset):
 
 
 class SummarizationDataLoader(DataLoader):
-    def __init__(self, dataset: SummarizationDataset, batch_size: int, get_oov: bool):
+    def __init__(self, dataset: SummarizationDataset, batch_size: int):
         super().__init__(dataset, batch_size, shuffle=True, drop_last=False, collate_fn=self.__generate_batch)
-        self.__get_oov = get_oov
+        self.__get_oov = dataset.get_oov
+        self.__max_summary_length = dataset.max_summary_length
 
     def __generate_batch(self, batch: List) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor],
                                                      Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor,
@@ -111,6 +112,12 @@ class SummarizationDataLoader(DataLoader):
         texts_padded = pad_sequence(texts)
         summaries_padded = pad_sequence(summaries)
         targets_padded = pad_sequence(targets)
+        extra_padding = self.__max_summary_length - targets_padded.shape[0]
+        # Summaries are always padded to max length to prevent errors with different prediction and target lengths
+        if extra_padding > 0:
+            padding = torch.zeros(extra_padding, targets_padded.shape[1], dtype=torch.long)
+            summaries_padded = torch.cat((summaries_padded, padding), dim=0)
+            targets_padded = torch.cat((targets_padded, padding), dim=0)
 
         if self.__get_oov:
             return texts_padded, texts_lengths, summaries_padded, summaries_lengths, texts_extended_padded, \

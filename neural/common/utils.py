@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Callable, Any
+from typing import List, Tuple, Callable, Any
 
 import numpy as np
 import torch
@@ -83,3 +83,28 @@ def load_args_from_file(filepath: Path) -> argparse.Namespace:
         args = json.load(file)
 
     return argparse.Namespace(**args)
+
+
+def clean_predicted_tokens(tokens: Tensor, eos_index: int) -> Tensor:
+    eos_mask = torch.as_tensor(tokens == eos_index, dtype=torch.bool)
+    for i, j in zip(*torch.nonzero(eos_mask, as_tuple=True)):
+        tokens[i + 1:, j] = 0
+
+    return tokens
+
+
+def remove_unnecessary_padding(tokens: Tensor, targets: Tensor) -> Tuple[Tensor, Tensor]:
+    # Add batch dim if necessary
+    if len(tokens.shape) == 1:
+        tokens = tokens.unsqueeze(1)
+    if len(targets.shape) == 1:
+        targets = targets.unsqueeze(1)
+
+    predictions_mask = torch.clip(torch.sum(tokens, dim=1), max=1)
+    targets_mask = torch.clip(torch.sum(targets, dim=1), max=1)
+    padding_mask = torch.clip((predictions_mask + targets_mask), max=1)
+    last_index = torch.sum(padding_mask)
+    tokens = torch.squeeze(tokens[:last_index, :])
+    targets = torch.squeeze(targets[:last_index, :])
+
+    return tokens, targets

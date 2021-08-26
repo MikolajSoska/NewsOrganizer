@@ -189,7 +189,7 @@ class PointerGeneratorNetwork(nn.Module):
         attention_list = []
         coverage_list = []
 
-        for i in range(summaries.shape[0]):
+        for i in range(self.max_summary_length):
             decoder_input = summaries[i, :]
             if not self.training:  # Remove OOV tokens in validation phase
                 decoder_input[decoder_input >= self.vocab_size] = self.unk_index
@@ -201,7 +201,7 @@ class PointerGeneratorNetwork(nn.Module):
             attention_list.append(attention)
             coverage_list.append(coverage)
 
-            if not self.training and i + 1 < summaries.shape[0]:
+            if not self.training and i + 1 < self.max_summary_length:
                 summaries[i + 1, :] = torch.argmax(decoder_out, dim=1)
 
         outputs = torch.stack(outputs)
