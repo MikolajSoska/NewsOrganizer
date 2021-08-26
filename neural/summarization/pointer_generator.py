@@ -12,20 +12,20 @@ class Encoder(nn.Module):
         super().__init__()
         self.lstm = layers.PackedRNN(nn.LSTM(input_size=embedding_dim, hidden_size=hidden_size, bidirectional=True))
         self.features = nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size * 2, bias=False)
+            nn.Linear(2 * hidden_size, 2 * hidden_size, bias=False)
         )
         self.reduce_hidden = nn.Sequential(
             layers.Transpose(0, 1),
             layers.Contiguous(),
-            layers.View(-1, hidden_size * 2),
-            nn.Linear(hidden_size * 2, hidden_size),
+            layers.View(-1, 2 * hidden_size),
+            nn.Linear(2 * hidden_size, hidden_size),
             nn.ReLU()
         )
         self.reduce_cell = nn.Sequential(
             layers.Transpose(0, 1),
             layers.Contiguous(),
-            layers.View(-1, hidden_size * 2),
-            nn.Linear(hidden_size * 2, hidden_size),
+            layers.View(-1, 2 * hidden_size),
+            nn.Linear(2 * hidden_size, hidden_size),
             nn.ReLU()
         )
 
@@ -101,16 +101,16 @@ class Decoder(nn.Module):
         self.attention = Attention(hidden_size)
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
         self.context = nn.Sequential(
-            nn.Linear(hidden_size * 2 + embedding_dim, embedding_dim)
+            nn.Linear(2 * hidden_size + embedding_dim, embedding_dim)
         )
         self.pointer_generator = layers.SequentialMultiInput(
             layers.Concatenate(1),
-            nn.Linear(hidden_size * 4 + embedding_dim, 1),
+            nn.Linear(4 * hidden_size + embedding_dim, 1),
             nn.Sigmoid()
         )
         self.out = layers.SequentialMultiInput(
             layers.Concatenate(1),
-            nn.Linear(hidden_size * 4, hidden_size),
+            nn.Linear(4 * hidden_size, hidden_size),
             nn.Linear(hidden_size, vocab_size),
             nn.Softmax(dim=1)
         )
