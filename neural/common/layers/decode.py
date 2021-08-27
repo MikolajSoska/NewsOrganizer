@@ -115,12 +115,13 @@ class BaseRNNDecoder(nn.Module, ABC):
         predicted_tokens = []
         decoder_outputs = []
         for i in range(self.max_output_length):
+            decoder_input = self.preprocess_decoder_inputs(decoder_input)
             decoder_input = self.embedding(decoder_input)
             prediction, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
             predictions.append(prediction)
             decoder_outputs.append(decoder_out)
 
-            tokens = self.get_new_decoder_inputs(prediction)
+            tokens = self.get_predicted_tokens(prediction)
             tokens = tokens.detach()
             predicted_tokens.append(tokens)
 
@@ -144,5 +145,9 @@ class BaseRNNDecoder(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def get_new_decoder_inputs(self, predictions: Tensor) -> Tensor:
+    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
+        pass
+
+    @abstractmethod
+    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
         pass

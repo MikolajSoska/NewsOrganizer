@@ -1,10 +1,11 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.layers.decode import BaseRNNDecoder
 
 
 class Encoder(nn.Module):
@@ -94,10 +95,14 @@ class Attention(nn.Module):
         return context, attention, coverage
 
 
-class Decoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
-        super().__init__()
+class Decoder(BaseRNNDecoder):
+    def __init__(self, vocab_size: int, hidden_size: int, max_summary_length, bos_index: int, unk_index: int,
+                 embedding: nn.Embedding):
+        super().__init__(bos_index, max_summary_length, embedding)
+        embedding_dim = embedding.embedding_dim
+        self.unk_index = unk_index
         self.hidden_size = hidden_size
+        self.vocab_size = vocab_size
         self.attention = Attention(hidden_size)
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
         self.context = nn.Sequential(
@@ -115,11 +120,13 @@ class Decoder(nn.Module):
             nn.Softmax(dim=1)
         )
 
-    def forward(self, outputs: Tensor, encoder_hidden: Tuple[Tensor, Tensor], encoder_out: Tensor,
-                encoder_features: Tensor, encoder_mask: Tensor, previous_context: Tensor, coverage: Optional[Tensor],
-                texts_extended: Tensor, oov_size: int) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor, Tensor,
-                                                                Optional[Tensor]]:
-        outputs = torch.cat((previous_context, outputs), dim=1)
+    def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Tuple[Tensor, Tensor], Tensor, Tensor],
+                     constant_inputs: Tuple[Tensor, Tensor, Tensor, Tensor, int]) -> Tuple[Tensor, Tuple[Any, ...],
+                                                                                           Tuple[Any, ...]]:
+        encoder_hidden, previous_context, coverage = cyclic_inputs
+        encoder_out, encoder_features, encoder_mask, inputs_extended, oov_size = constant_inputs
+
+        outputs = torch.cat((previous_context, decoder_input), dim=1)
         outputs = self.context(outputs)
         hidden, cell = self.lstm(outputs, encoder_hidden)
 
@@ -136,9 +143,18 @@ class Decoder(nn.Module):
             oov_zeros = torch.zeros((batch_size, oov_size), device=vocab_distribution.device)
             vocab_distribution = torch.cat((vocab_distribution, oov_zeros), dim=1)
 
-        final = torch.scatter_add(vocab_distribution, 1, texts_extended.permute(1, 0), oov_attention.permute(1, 0))
+        final = torch.scatter_add(vocab_distribution, 1, inputs_extended.permute(1, 0), oov_attention.permute(1, 0))
 
-        return final, (hidden, cell), context, attention, coverage
+        return final, ((hidden, cell), context, coverage), (attention, coverage)
+
+    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
+        if not self.training:  # Remove OOV tokens in validation phase
+            decoder_inputs[decoder_inputs >= self.vocab_size] = self.unk_index
+
+        return decoder_inputs
+
+    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
+        return torch.argmax(predictions, dim=1)
 
 
 class PointerGeneratorNetwork(nn.Module):
@@ -146,28 +162,19 @@ class PointerGeneratorNetwork(nn.Module):
                  max_summary_length: int):
         super().__init__()
         self.hidden_size = hidden_size
-        self.vocab_size = vocab_size
-        self.max_summary_length = max_summary_length
-        self.bos_index = bos_index
-        self.unk_index = unk_index
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.encoder = Encoder(embedding_dim, hidden_size)
-        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size)
+        self.decoder = Decoder(vocab_size, hidden_size, max_summary_length, bos_index, unk_index, self.embedding)
 
     def activate_coverage(self):
         self.with_coverage = True
 
     def forward(self, inputs: Tensor, inputs_lengths: Tensor, inputs_extended: Tensor,
-                oov_size: int, outputs: Tensor = None) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
+                oov_size: int, outputs: Tensor = None) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor]]:
         device = inputs.device
         batch_size = inputs.shape[1]
-
-        if self.training:
-            if outputs is None:
-                raise AttributeError('During training reference outputs must be provided.')
-        else:  # In validation phase never use passed summaries
-            outputs = torch.full((self.max_summary_length, batch_size), self.bos_index, dtype=torch.long, device=device)
+        teacher_forcing_ratio = 1.  # In this model teacher forcing is used in every step
 
         inputs_embedded = self.embedding(inputs)
         encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_lengths)
@@ -179,31 +186,15 @@ class PointerGeneratorNetwork(nn.Module):
         else:
             coverage = None
 
-        outputs_list = []
-        attention_list = []
-        coverage_list = []
-
-        for i in range(self.max_summary_length):
-            decoder_input = outputs[i, :]
-            if not self.training:  # Remove OOV tokens in validation phase
-                decoder_input[decoder_input >= self.vocab_size] = self.unk_index
-            outputs_embedded = self.embedding(decoder_input)
-            decoder_out, encoder_hidden, context, attention, coverage = self.decoder(outputs_embedded, encoder_hidden,
-                                                                                     encoder_out, encoder_features,
-                                                                                     encoder_mask, context, coverage,
-                                                                                     inputs_extended, oov_size)
-            outputs_list.append(decoder_out)
-            attention_list.append(attention)
-            coverage_list.append(coverage)
-
-            if not self.training and i + 1 < self.max_summary_length:
-                outputs[i + 1, :] = torch.argmax(decoder_out, dim=1)
-
-        outputs = torch.stack(outputs_list)
+        outputs, tokens, decoder_outputs = self.decoder(outputs, teacher_forcing_ratio, batch_size, device,
+                                                        cyclic_inputs=(encoder_hidden, context, coverage),
+                                                        constant_inputs=(encoder_out, encoder_features, encoder_mask,
+                                                                         inputs_extended, oov_size))
+        attention_list, coverage_list = zip(*decoder_outputs)
         attentions = torch.stack(attention_list)
         if self.with_coverage:
             coverages = torch.stack(coverage_list)
         else:
             coverages = None
 
-        return outputs, attentions, coverages
+        return outputs, tokens, attentions, coverages

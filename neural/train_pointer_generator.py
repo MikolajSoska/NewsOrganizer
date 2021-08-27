@@ -48,7 +48,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
         model.activate_coverage()
 
     oov_size = len(max(oov_list, key=lambda x: len(x)))
-    output, attention, coverage = model(texts, texts_lengths, texts_extended, oov_size, summaries)
+    output, tokens, attention, coverage = model(texts, texts_lengths, texts_extended, oov_size, summaries)
     loss = trainer.criterion.summarization(output, targets, summaries_lengths)
     if coverage is not None:
         loss = loss + trainer.criterion.coverage(attention, coverage, targets)
@@ -57,7 +57,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     score = ScoreValue()
     for i in range(batch_size):  # Due to different OOV words for each sequence in a batch, it has to scored separately
         utils.add_words_to_vocab(trainer.params.vocab, oov_list[i])
-        score_out = output[:, i, :].unsqueeze(dim=1)
+        score_out = tokens[:, i].unsqueeze(dim=1)
         score_target = targets[:, i].unsqueeze(dim=1)
         score += trainer.score(score_out, score_target)
         utils.remove_words_from_vocab(trainer.params.vocab, oov_list[i])
