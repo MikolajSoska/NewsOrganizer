@@ -175,7 +175,7 @@ class Decoder(BaseRNNDecoder):
 
         return final_distribution, ((hidden, cell), temporal_scores_sum, previous_hidden), ()
 
-    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
+    def _get_predicted_tokens(self, predictions: Tensor) -> Tensor:
         if self.train_rl:  # In RL training draw tokens from categorical distribution
             distribution = Categorical(predictions)
             tokens = distribution.sample()
@@ -185,7 +185,7 @@ class Decoder(BaseRNNDecoder):
 
         return tokens
 
-    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
+    def _preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
         decoder_inputs[decoder_inputs >= self.vocab_size] = self.unk_index  # Remove OOV tokens
 
         return decoder_inputs.detach()  # This can be done during training so detach in necessary
@@ -199,10 +199,6 @@ class ReinforcementSummarization(nn.Module):
 
         super().__init__()
         self.vocab_size = vocab_size
-        self.max_summary_length = max_summary_length
-        self.bos_index = bos_index
-        self.unk_index = unk_index
-
         if embeddings is not None:
             self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False, padding_idx=0)
             embedding_dim = self.embedding.embedding_dim
@@ -210,24 +206,8 @@ class ReinforcementSummarization(nn.Module):
             self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
 
         self.encoder = Encoder(embedding_dim, hidden_size)
-        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size, use_intra_attention)
-
-    def __validate_outputs(self, inputs: Tensor, outputs: Optional[Tensor],
-                           teacher_forcing_ratio: float) -> Tuple[Tensor, float]:
-        device = inputs.device
-        if self.training:
-            if outputs is None:
-                if teacher_forcing_ratio > 0:
-                    raise AttributeError('During training with teacher forcing reference summaries must be provided.')
-                else:
-                    outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
-                                         device=device)
-        else:  # In validation phase never use passed summaries (
-            outputs = torch.full((self.max_summary_length, inputs.shape[1]), self.bos_index, dtype=torch.long,
-                                 device=device)
-            teacher_forcing_ratio = 0.  # In validation phase teacher forcing is not used
-
-        return outputs, teacher_forcing_ratio
+        self.decoder = Decoder(vocab_size, embedding_dim, hidden_size, bos_index, unk_index, max_summary_length,
+                               use_intra_attention)
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
                 outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,

@@ -89,8 +89,19 @@ class BaseRNNDecoder(nn.Module, ABC):
         self.bos_index = bos_index
         self.max_output_length = max_output_length
 
-    def __validate_outputs(self, outputs: Optional[Tensor], teacher_forcing_ratio: float, batch_size: int,
-                           device: str) -> Tuple[Tensor, float]:
+    @abstractmethod
+    def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Any, ...],
+                     constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tuple[Any, ...], Tuple[Any, ...]]:
+        pass
+
+    def _get_predicted_tokens(self, predictions: Tensor) -> Tensor:
+        return torch.argmax(predictions, dim=-1)
+
+    def _preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
+        return decoder_inputs
+
+    def _validate_outputs(self, outputs: Optional[Tensor], teacher_forcing_ratio: float, batch_size: int,
+                          device: str) -> Tuple[Tensor, float]:
         if self.training:
             if outputs is None:
                 if teacher_forcing_ratio > 0:
@@ -107,20 +118,20 @@ class BaseRNNDecoder(nn.Module, ABC):
     def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
                 device: str, cyclic_inputs: Tuple[Any, ...],
                 constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
-        outputs, teacher_forcing_ratio = self.__validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
+        outputs, teacher_forcing_ratio = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
         decoder_input = outputs[0, :]
 
         predictions = []
         predicted_tokens = []
         decoder_outputs = []
         for i in range(self.max_output_length):
-            decoder_input = self.preprocess_decoder_inputs(decoder_input)
+            decoder_input = self._preprocess_decoder_inputs(decoder_input)
             decoder_input = embedding(decoder_input)
             prediction, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
             predictions.append(prediction)
             decoder_outputs.append(decoder_out)
 
-            tokens = self.get_predicted_tokens(prediction)
+            tokens = self._get_predicted_tokens(prediction)
             tokens = tokens.detach()
             predicted_tokens.append(tokens)
 
@@ -137,16 +148,3 @@ class BaseRNNDecoder(nn.Module, ABC):
         predicted_tokens = torch.stack(predicted_tokens)
 
         return predictions, predicted_tokens, decoder_outputs
-
-    @abstractmethod
-    def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Any, ...],
-                     constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tuple[Any, ...], Tuple[Any, ...]]:
-        pass
-
-    @abstractmethod
-    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
-        pass
-
-    @abstractmethod
-    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
-        pass

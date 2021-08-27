@@ -1,11 +1,12 @@
 import math
-from typing import Tuple
+from typing import List, Tuple, Optional
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.layers.decode import BaseRNNDecoder
 
 
 class PositionalEncoding(nn.Module):
@@ -157,15 +158,22 @@ class DecoderLayer(nn.Module):
         return out, outputs_mask, encoder_out, encoder_mask
 
 
-class Decoder(nn.Module):
-    def __init__(self, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
-                 heads_number: int, feed_forward_size: int, dropout_rate: float):
-        super().__init__()
+class Decoder(BaseRNNDecoder):
+    def __init__(self, vocab_size: int, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
+                 heads_number: int, feed_forward_size: int, dropout_rate: float, bos_index: int, padding_index: int,
+                 max_output_length: int, embedding_weight: Tensor):
+        super().__init__(bos_index, max_output_length)
+        self.padding_index = padding_index
         self.layer_norm = nn.LayerNorm(embedding_dim, eps=1e-6)
         self.decoders = layers.SequentialMultiInput(
             *[DecoderLayer(embedding_dim, key_and_query_dim, value_dim, heads_number, feed_forward_size, dropout_rate)
               for _ in range(decoder_layers)]
         )
+        self.out = nn.Sequential(
+            nn.Linear(embedding_dim, vocab_size, bias=False),
+            layers.Multiply(value=embedding_dim ** -0.5),
+        )
+        self.out[0].weight = embedding_weight  # Share weights
 
     @staticmethod
     def __get_decoder_mask(sequence):
@@ -174,12 +182,38 @@ class Decoder(nn.Module):
         mask = mask.unsqueeze(0).unsqueeze(0)  # Add dimensions to be broadcastable to batch x heads x seq x seq
         return mask
 
-    def forward(self, outputs: Tensor, outputs_mask: Tensor, encoder_out: Tensor, encoder_mask: Tensor) -> Tensor:
-        outputs_mask = outputs_mask | self.__get_decoder_mask(outputs)
-        outputs = self.layer_norm(outputs)
-        out, _, _, _ = self.decoders(outputs, outputs_mask, encoder_out, encoder_mask)
+    def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[()],
+                     constant_inputs: Tuple[Tensor, Tensor, nn.Embedding]) -> Tuple[Tensor, Tuple[()], Tuple[()]]:
+        encoder_out, encoder_mask, embedding = constant_inputs
 
-        return out
+        outputs_mask = Transformer.get_padding_mask(decoder_input, self.padding_index)
+        outputs_mask = outputs_mask | self.__get_decoder_mask(decoder_input)
+        outputs_embedded = embedding(decoder_input)
+        outputs_embedded = self.layer_norm(outputs_embedded)
+        decoder_out, _, _, _ = self.decoders(outputs_embedded, outputs_mask, encoder_out, encoder_mask)
+
+        return self.out(decoder_out), (), ()
+
+    def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
+                device: str, cyclic_inputs: Tuple[()],
+                constant_inputs: Tuple[Tensor, Tensor, nn.Embedding]) -> Tuple[Tensor, Tensor, List[None]]:
+        outputs, teacher_forcing_ratio = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
+
+        # Custom forward for this model depending on phase
+        if self.training and teacher_forcing_ratio == 1.0:
+            predictions, _, _ = self.decoder_step(outputs, cyclic_inputs, constant_inputs)
+            tokens = self._get_predicted_tokens(predictions)
+        else:
+            predictions = None
+            for i in range(self.max_output_length):
+                decoder_input = outputs[:i + 1, :]
+                predictions_step, _, _ = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
+                predictions = predictions_step
+                if i + 1 < self.max_output_length:
+                    outputs[1:i + 2, :] = self._get_predicted_tokens(predictions_step)
+            tokens = self._get_predicted_tokens(predictions)
+
+        return predictions, tokens, []
 
 
 class Transformer(nn.Module):
@@ -197,46 +231,27 @@ class Transformer(nn.Module):
         )
         self.encoder = Encoder(encoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
                                feed_forward_size, dropout_rate)
-        self.decoder = Decoder(decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
-                               feed_forward_size, dropout_rate)
-        self.out = nn.Sequential(
-            nn.Linear(embedding_dim, vocab_size, bias=False),
-            layers.Multiply(value=embedding_dim ** -0.5),
-        )
-        self.out[0].weight = self.embedding[0].weight  # Share weights
+        self.decoder = Decoder(vocab_size, decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
+                               feed_forward_size, dropout_rate, bos_index, padding_index, max_summary_length,
+                               self.embedding[0].weight)
 
-    def __get_padding_mask(self, sequence):
-        mask = sequence == self.padding_index
+    @staticmethod
+    def get_padding_mask(sequence, padding_index):
+        mask = sequence == padding_index
+        mask = torch.as_tensor(mask, dtype=torch.bool, device=sequence.device)
         mask = mask.transpose(0, 1)
         mask = mask.unsqueeze(1).unsqueeze(1)  # Add dimensions to be broadcastable to batch x heads x seq x seq
         return mask
 
-    def forward(self, inputs: Tensor, outputs: Tensor = None) -> Tensor:
-        if self.training:
-            if outputs is None:
-                raise AttributeError('During training reference outputs must be provided.')
-        else:  # In validation phase never use passed outputs
-            outputs = torch.full((self.max_summary_length + 1, inputs.shape[1]), self.bos_index, dtype=torch.long,
-                                 device=inputs.device)
+    def forward(self, inputs: Tensor, outputs: Tensor = None) -> Tuple[Tensor, Tensor]:
+        device = inputs.device
+        batch_size = inputs.shape[1]
+        teacher_forcing_ratio = 1.  # In this model teacher forcing is always used
 
-        inputs_mask = self.__get_padding_mask(inputs)
+        inputs_mask = self.get_padding_mask(inputs, self.padding_index)
         inputs_embedded = self.embedding(inputs)
 
         encoder_out = self.encoder(inputs_embedded, inputs_mask)
-        if self.training:
-            out = self.__decoder_step(outputs, encoder_out, inputs_mask)
-        else:
-            out = None
-            for i in range(self.max_summary_length):
-                decoder_input = outputs[:i + 1, :]
-                out_step = self.__decoder_step(decoder_input, encoder_out, inputs_mask)
-                outputs[1:i + 2, :] = torch.argmax(out_step, dim=-1)
-                out = out_step
-
-        return out
-
-    def __decoder_step(self, outputs: Tensor, encoder_out: Tensor, inputs_mask: Tensor) -> Tensor:
-        outputs_mask = self.__get_padding_mask(outputs)
-        outputs_embedded = self.embedding(outputs)
-        decoder_out = self.decoder(outputs_embedded, outputs_mask, encoder_out, inputs_mask)
-        return self.out(decoder_out)
+        out, tokens, _ = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size, device, (),
+                                      constant_inputs=(encoder_out, inputs_mask, self.embedding))
+        return out, tokens

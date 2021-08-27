@@ -44,10 +44,10 @@ def parse_args() -> argparse.Namespace:
 def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, ScoreValue]:
     texts, _, summaries, _, targets = inputs
     model = trainer.model.transformer
-    output = model(texts, summaries)
+    output, tokens = model(texts, summaries)
 
     loss = trainer.criterion.loss(output, targets)
-    score = trainer.score(output, targets)
+    score = trainer.score(tokens, targets)
     del output
 
     return loss, score

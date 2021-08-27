@@ -146,14 +146,11 @@ class Decoder(BaseRNNDecoder):
 
         return final, ((hidden, cell), context, coverage), (attention, coverage)
 
-    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
+    def _preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
         if not self.training:  # Remove OOV tokens in validation phase
             decoder_inputs[decoder_inputs >= self.vocab_size] = self.unk_index
 
         return decoder_inputs
-
-    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
-        return torch.argmax(predictions, dim=1)
 
 
 class PointerGeneratorNetwork(nn.Module):
