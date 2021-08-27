@@ -46,7 +46,7 @@ class IntraTemporalAttention(nn.Module):
             layers.Transpose(0, 1)
         )
 
-    def forward(self, outputs_hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor,
+    def forward(self, outputs_hidden: Tensor, encoder_out: Tensor, encoder_features: Tensor, encoder_mask: Tensor,
                 temporal_scores_sum: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         decoder_features = self.features(outputs_hidden)
         temporal_attention = self.attention(decoder_features + encoder_features)
@@ -58,6 +58,7 @@ class IntraTemporalAttention(nn.Module):
             attention = temporal_attention
             temporal_scores_sum = temporal_attention
 
+        attention = attention * encoder_mask
         attention = self.normalize(attention)
         encoder_out = torch.transpose(encoder_out, 0, 1)
         context = self.context(attention, encoder_out)
@@ -145,15 +146,15 @@ class Decoder(BaseRNNDecoder):
         return predictions, tokens, self.log_probabilities
 
     def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Tuple[Tensor, Tensor], Tensor, Tensor],
-                     constant_inputs: Tuple[Tensor, Tensor, Tensor, int]) -> \
+                     constant_inputs: Tuple[Tensor, Tensor, Tensor, Tensor, int]) -> \
             Tuple[Tensor, Tuple[Tuple[Tensor, Tensor], Tensor, Tensor], Tuple[()]]:
         encoder_hidden, temporal_scores_sum, previous_hidden = cyclic_inputs
-        encoder_out, encoder_features, inputs_extended, oov_size = constant_inputs
+        encoder_out, encoder_features, encoder_mask, inputs_extended, oov_size = constant_inputs
 
         hidden, cell = self.lstm(decoder_input, encoder_hidden)
         decoder_hidden = torch.unsqueeze(hidden, 0)
         encoder_attention, temporal_attention, temporal_scores_sum = \
-            self.encoder_attention(decoder_hidden, encoder_out, encoder_features, temporal_scores_sum)
+            self.encoder_attention(decoder_hidden, encoder_out, encoder_features, encoder_mask, temporal_scores_sum)
 
         if self.decoder_attention is not None:
             decoder_attention, previous_hidden = self.decoder_attention(decoder_hidden, previous_hidden)
@@ -216,11 +217,14 @@ class ReinforcementSummarization(nn.Module):
         batch_size = inputs.shape[1]
         inputs_embedded = self.embedding(inputs)
         encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
+        encoder_mask = torch.clip(inputs, max=1)
+        encoder_mask = torch.transpose(encoder_mask, 0, 1)
+        encoder_mask = torch.unsqueeze(encoder_mask, 1)
 
         self.decoder.start_decoding(train_rl)
         outputs, tokens, log_probabilities = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size,
                                                           device, cyclic_inputs=(encoder_hidden, None, None),
-                                                          constant_inputs=(encoder_out, encoder_features,
+                                                          constant_inputs=(encoder_out, encoder_features, encoder_mask,
                                                                            inputs_extended, oov_size))
         log_probabilities = [log_prob[0] for log_prob in log_probabilities]  # Get rid of tuple
         if train_rl:  # Return log probabilities used in RL loss function
