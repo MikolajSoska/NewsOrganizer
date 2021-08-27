@@ -81,7 +81,8 @@ def main() -> None:
     dataset = partial(SummarizationDataset, args.dataset, max_article_length=args.max_article_length,
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=False,
                       data_dir=args.data_path)
-    dataloader = partial(SummarizationDataLoader, batch_size=args.batch)
+    # Predictions and targets always have the same size, so no need to extra padding
+    dataloader = partial(SummarizationDataLoader, batch_size=args.batch, pad_to_max=False)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')

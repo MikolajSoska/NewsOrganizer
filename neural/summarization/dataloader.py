@@ -91,10 +91,11 @@ class SummarizationDataset(Dataset):
 
 
 class SummarizationDataLoader(DataLoader):
-    def __init__(self, dataset: SummarizationDataset, batch_size: int):
+    def __init__(self, dataset: SummarizationDataset, batch_size: int, pad_to_max: bool = True):
         super().__init__(dataset, batch_size, shuffle=True, drop_last=False, collate_fn=self.__generate_batch)
         self.__get_oov = dataset.get_oov
         self.__max_summary_length = dataset.max_summary_length
+        self.__pad_to_max = pad_to_max
 
     def __generate_batch(self, batch: List) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor],
                                                      Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor,
@@ -114,7 +115,7 @@ class SummarizationDataLoader(DataLoader):
         targets_padded = pad_sequence(targets)
         extra_padding = self.__max_summary_length - targets_padded.shape[0]
         # Summaries are always padded to max length to prevent errors with different prediction and target lengths
-        if extra_padding > 0:
+        if extra_padding > 0 and self.__pad_to_max:
             padding = torch.zeros(extra_padding, targets_padded.shape[1], dtype=torch.long)
             summaries_padded = torch.cat((summaries_padded, padding), dim=0)
             targets_padded = torch.cat((targets_padded, padding), dim=0)

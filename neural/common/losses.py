@@ -66,12 +66,13 @@ class LabelSmoothingCrossEntropy(LossWithReduction):
     def forward(self, predictions: Tensor, targets: Tensor) -> Tensor:
         predictions = torch.flatten(predictions, end_dim=1)
         targets = torch.flatten(targets)
+        padding_mask = torch.clip(targets, min=0, max=1)
         class_number = predictions.shape[-1]
 
         predictions_log = torch.log_softmax(predictions, dim=-1)
         encoding = torch.full_like(predictions_log, self.smoothing / (class_number - 1))
         encoding = torch.scatter(encoding, 1, targets.unsqueeze(1), self.confidence)
-        loss = torch.sum(-encoding * predictions_log, dim=-1)
+        loss = torch.sum(-encoding * predictions_log, dim=-1) * padding_mask
 
         return self.reduction(loss)
 
