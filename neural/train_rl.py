@@ -61,7 +61,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
         train_rl = trainer.params.train_rl
 
     if train_ml or trainer.current_phase != 'train':  # During validation only use this approach
-        predictions, tokens = model(texts, texts_lengths, texts_extended, oov_size, summaries, teacher_forcing_ratio)
+        predictions, tokens, _ = model(texts, texts_lengths, texts_extended, oov_size, summaries, teacher_forcing_ratio)
         ml_loss = trainer.criterion.ml_loss(predictions, targets, summaries_lengths)
 
         # Scoring is performed only in ML approach
@@ -79,10 +79,10 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
         ml_loss = 0
 
     if train_rl and trainer.current_phase == 'train':  # Use RL only in training phase
-        log_probabilities, tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.,
-                                          train_rl=True)
+        log_probabilities, tokens, _ = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.,
+                                             train_rl=True)
         with torch.no_grad():
-            _, baseline_tokens = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.)
+            _, baseline_tokens, _ = model(texts, texts_lengths, texts_extended, oov_size, teacher_forcing_ratio=0.)
         rl_loss = trainer.criterion.rl_loss(log_probabilities, tokens, baseline_tokens, targets, oov_list)
         del log_probabilities
         del baseline_tokens

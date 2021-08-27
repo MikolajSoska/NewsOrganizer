@@ -49,7 +49,7 @@ class CoverageLoss(LossWithReduction):
 
     def forward(self, attention: Tensor, coverage: Tensor, targets: Tensor) -> Tensor:
         padding_mask = torch.clip(targets, min=0, max=1)
-        loss = self.weight * torch.sum(torch.min(attention, coverage), dim=1) * padding_mask
+        loss = self.weight * torch.sum(torch.min(attention, coverage), dim=-1) * padding_mask
         if self.reduction is not None:
             return self.reduction(loss)
         else:

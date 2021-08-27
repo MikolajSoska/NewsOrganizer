@@ -49,6 +49,7 @@ class Attention(nn.Module):
             layers.Unsqueeze(0),
         )
         self.coverage = nn.Sequential(
+            layers.Transpose(0, 1),
             layers.Unsqueeze(-1),
             nn.Linear(1, 2 * hidden_size, bias=False)
         )
@@ -61,7 +62,7 @@ class Attention(nn.Module):
         self.attention_second = nn.Sequential(
             # If encoder_mask sets some weights to zero, than they don't sum to one, so re-normalization is needed
             layers.Normalize(0),
-            layers.Permute(1, 0),
+            layers.Transpose(0, 1),
             layers.Unsqueeze(1)
         )
         self.attention_out = nn.Sequential(
@@ -87,7 +88,7 @@ class Attention(nn.Module):
         attention = self.attention_second(attention)
 
         context = self.context(attention, encoder_out)
-        attention = self.attention_out(attention)
+        attention = torch.squeeze(attention)
 
         if coverage is not None:
             coverage = coverage + attention
@@ -136,13 +137,13 @@ class Decoder(BaseRNNDecoder):
         p_gen = self.pointer_generator(context, decoder_hidden, outputs)
         out = self.out(decoder_hidden, context)
         vocab_distribution = p_gen * out
-        oov_attention = (1 - p_gen).permute(1, 0) * attention
+        oov_attention = (1 - p_gen) * attention
         if oov_size > 0:
             batch_size = vocab_distribution.shape[0]
             oov_zeros = torch.zeros((batch_size, oov_size), device=vocab_distribution.device)
             vocab_distribution = torch.cat((vocab_distribution, oov_zeros), dim=1)
 
-        final = torch.scatter_add(vocab_distribution, 1, inputs_extended.permute(1, 0), oov_attention.permute(1, 0))
+        final = torch.scatter_add(vocab_distribution, 1, inputs_extended.transpose(0, 1), oov_attention)
 
         return final, ((hidden, cell), context, coverage), (attention, coverage)
 
@@ -179,6 +180,7 @@ class PointerGeneratorNetwork(nn.Module):
         context = torch.zeros((batch_size, 2 * self.hidden_size), device=device)
         if self.with_coverage:
             coverage = torch.zeros_like(inputs, device=device, dtype=torch.float)
+            coverage = torch.transpose(coverage, 0, 1)
         else:
             coverage = None
 

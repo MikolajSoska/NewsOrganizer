@@ -70,6 +70,7 @@ class IntraDecoderAttention(nn.Module):
     def __init__(self, hidden_size: int):
         super().__init__()
         self.attention_first = nn.Sequential(
+            layers.Transpose(0, 1),
             nn.Linear(hidden_size, hidden_size, bias=False),
             layers.Permute(1, 2, 0)
         )
@@ -81,22 +82,17 @@ class IntraDecoderAttention(nn.Module):
             layers.MatrixProduct(),
             layers.Transpose(0, 1)
         )
-        self.previous_hidden = layers.SequentialMultiInput(
-            layers.Concatenate(1),
-            layers.Transpose(0, 1)
-        )
 
     def forward(self, decoder_hidden: Tensor, previous_hidden: Tensor = None) -> Tuple[Tensor, Tensor]:
         if previous_hidden is None:
             context = torch.zeros_like(decoder_hidden)
-            return context, decoder_hidden
+            return context, decoder_hidden.transpose(0, 1)
 
         decoder_hidden = torch.transpose(decoder_hidden, 0, 1)
         attention = self.attention_first(previous_hidden)
-        previous_hidden = torch.transpose(previous_hidden, 0, 1)
         attention = self.attention_second(decoder_hidden, attention)
         context = self.context(attention, previous_hidden)
-        previous_hidden = self.previous_hidden(previous_hidden, decoder_hidden)
+        previous_hidden = torch.cat((previous_hidden, decoder_hidden), dim=1)
 
         return context, previous_hidden
 
@@ -141,13 +137,15 @@ class Decoder(BaseRNNDecoder):
     def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
                 device: str, cyclic_inputs: Tuple[Any, ...],
                 constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
-        predictions, tokens, _ = super().forward(outputs, embedding, teacher_forcing_ratio, batch_size, device,
-                                                 cyclic_inputs, constant_inputs)
-        return predictions, tokens, self.log_probabilities
+        predictions, tokens, attention_list = super().forward(outputs, embedding, teacher_forcing_ratio, batch_size,
+                                                              device, cyclic_inputs, constant_inputs)
+        decoder_output = [(log_prob, attention[0]) for log_prob, attention in
+                          zip(self.log_probabilities, attention_list)]
+        return predictions, tokens, decoder_output
 
     def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Tuple[Tensor, Tensor], Tensor, Tensor],
                      constant_inputs: Tuple[Tensor, Tensor, Tensor, Tensor, int]) -> \
-            Tuple[Tensor, Tuple[Tuple[Tensor, Tensor], Tensor, Tensor], Tuple[()]]:
+            Tuple[Tensor, Tuple[Tuple[Tensor, Tensor], Tensor, Tensor], Tuple[Tensor]]:
         encoder_hidden, temporal_scores_sum, previous_hidden = cyclic_inputs
         encoder_out, encoder_features, encoder_mask, inputs_extended, oov_size = constant_inputs
 
@@ -172,17 +170,18 @@ class Decoder(BaseRNNDecoder):
             oov_zeros = torch.zeros((batch_size, oov_size), device=vocab_distribution.device)
             vocab_distribution = torch.cat((vocab_distribution, oov_zeros), dim=1)
 
-        final_distribution = torch.scatter_add(vocab_distribution, 1, inputs_extended.permute(1, 0), attention)
+        final_distribution = torch.scatter_add(vocab_distribution, 1, inputs_extended.transpose(1, 0), attention)
 
-        return final_distribution, ((hidden, cell), temporal_scores_sum, previous_hidden), ()
+        return final_distribution, ((hidden, cell), temporal_scores_sum, previous_hidden), (temporal_attention,)
 
     def _get_predicted_tokens(self, predictions: Tensor) -> Tensor:
         if self.train_rl:  # In RL training draw tokens from categorical distribution
             distribution = Categorical(predictions)
             tokens = distribution.sample()
-            self.log_probabilities.append((distribution.log_prob(tokens),))  # Append as tuple to match return type
+            self.log_probabilities.append(distribution.log_prob(tokens))
         else:  # Use simple greedy approach
             tokens = torch.argmax(predictions, dim=1)
+            self.log_probabilities.append(None)  # To match other outputs length
 
         return tokens
 
@@ -212,7 +211,7 @@ class ReinforcementSummarization(nn.Module):
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
                 outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,
-                train_rl: bool = False) -> Tuple[Tensor, Tensor]:
+                train_rl: bool = False) -> Tuple[Tensor, Tensor, Tensor]:
         device = inputs.device
         batch_size = inputs.shape[1]
         inputs_embedded = self.embedding(inputs)
@@ -222,12 +221,13 @@ class ReinforcementSummarization(nn.Module):
         encoder_mask = torch.unsqueeze(encoder_mask, 1)
 
         self.decoder.start_decoding(train_rl)
-        outputs, tokens, log_probabilities = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size,
-                                                          device, cyclic_inputs=(encoder_hidden, None, None),
-                                                          constant_inputs=(encoder_out, encoder_features, encoder_mask,
-                                                                           inputs_extended, oov_size))
-        log_probabilities = [log_prob[0] for log_prob in log_probabilities]  # Get rid of tuple
+        predictions, tokens, outputs = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size, device,
+                                                    cyclic_inputs=(encoder_hidden, None, None),
+                                                    constant_inputs=(encoder_out, encoder_features, encoder_mask,
+                                                                     inputs_extended, oov_size))
+        log_probabilities, attention = zip(*outputs)
+        attention = torch.cat(attention, dim=1)
         if train_rl:  # Return log probabilities used in RL loss function
-            return torch.stack(log_probabilities), tokens
+            return torch.stack(log_probabilities), tokens, attention
         else:
-            return outputs, tokens
+            return predictions, tokens, attention
