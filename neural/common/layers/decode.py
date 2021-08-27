@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Optional
 
@@ -83,11 +85,45 @@ class CRF(nn.Module):
         return result
 
 
-class BaseRNNDecoder(nn.Module, ABC):
-    def __init__(self, bos_index: int, max_output_length: int):
+class BeamSearchNode:
+    def __init__(self, bos_index: int, cyclic_input: Tuple[Any, ...]):
+        self.score = 0.
+        self.sequence = [bos_index]
+        self.predictions = []
+        self.cyclic_inputs = [cyclic_input]
+        self.decoder_outputs = []
+
+    @classmethod
+    def create_new_node(cls, node: BeamSearchNode, token: int, score: float, prediction: Tensor,
+                        cyclic_inputs: Tuple[Any, ...], decoder_outputs: Tuple[Any, ...]) -> BeamSearchNode:
+        new_node = cls(node.sequence[0], node.cyclic_inputs[0])
+        new_node.score = node.score + score
+        new_node.sequence = node.sequence + [token]
+        new_node.predictions = node.predictions + [prediction]
+        new_node.cyclic_inputs = node.cyclic_inputs + [cyclic_inputs]
+        new_node.decoder_outputs = node.decoder_outputs + [decoder_outputs]
+
+        return new_node
+
+    def __lt__(self, other: Any) -> bool:
+        if not isinstance(other, BeamSearchNode):
+            raise ValueError(f'{self.__class__.__name__} can\'t be compared with different classes.')
+
+        return self.score < other.score
+
+    def __str__(self) -> str:
+        return f'{self.__class__.__name__}: (score: {self.score}, sequence: {self.sequence})'
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class BeamSearchDecoder(nn.Module, ABC):
+    def __init__(self, bos_index: int, max_output_length: int, beam_size: int = 4):  # todo remove default beam size
         super().__init__()
         self.bos_index = bos_index
         self.max_output_length = max_output_length
+        self.beam_size = beam_size
 
     @abstractmethod
     def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Any, ...],
@@ -100,27 +136,101 @@ class BaseRNNDecoder(nn.Module, ABC):
     def _preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
         return decoder_inputs
 
+    def _preprocess_beam_search_inputs(self, nodes: Tuple[BeamSearchNode],
+                                       device: str) -> Tuple[Tensor, Tuple[Any, ...]]:
+        decoder_input = torch.tensor([node.sequence[-1] for node in nodes], device=device)
+        cyclic_inputs = self.__merge_batched_data([node.cyclic_inputs[-1] for node in nodes])
+        return self._preprocess_decoder_inputs(decoder_input), cyclic_inputs
+
     def _validate_outputs(self, outputs: Optional[Tensor], teacher_forcing_ratio: float, batch_size: int,
-                          device: str) -> Tuple[Tensor, float]:
-        if self.training:
-            if outputs is None:
-                if teacher_forcing_ratio > 0:
-                    raise AttributeError('During training with teacher forcing reference summaries must be provided.')
-                else:
-                    outputs = torch.full((self.max_output_length, batch_size), self.bos_index, dtype=torch.long,
-                                         device=device)
-        else:  # In validation phase never use passed summaries
-            outputs = torch.full((self.max_output_length, batch_size), self.bos_index, dtype=torch.long, device=device)
-            teacher_forcing_ratio = 0.  # In validation phase teacher forcing is not used
+                          device: str) -> Tensor:
+        if outputs is None:
+            if teacher_forcing_ratio > 0:
+                raise AttributeError('During training with teacher forcing reference summaries must be provided.')
+            else:
+                outputs = torch.full((self.max_output_length, batch_size), self.bos_index, dtype=torch.long,
+                                     device=device)
 
-        return outputs, teacher_forcing_ratio
+        return outputs
 
-    def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
-                device: str, cyclic_inputs: Tuple[Any, ...],
-                constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
-        outputs, teacher_forcing_ratio = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
+    def __divide_batched_data(self, batched_data: Tuple[Any, ...], batch_size: int) -> List[Tuple[Any, ...]]:
+        divided_data = [[] for _ in range(batch_size)]
+        for data in batched_data:
+            if isinstance(data, Tensor):
+                for i in range(batch_size):
+                    divided_data[i].append(data[i].unsqueeze(0))
+            elif isinstance(data, tuple):
+                for i, divided in enumerate(self.__divide_batched_data(data, batch_size)):
+                    divided_data[i].append(divided)
+            else:
+                for i in range(batch_size):
+                    divided_data[i].append(data)
+
+        return [tuple(data) for data in divided_data]
+
+    def __merge_batched_data(self, batched_data: List[Tuple[Any, ...]]) -> Tuple[Any, ...]:
+        merged_data = []
+        for data in zip(*batched_data):
+            if isinstance(data[0], Tensor):
+                merged_data.append(torch.cat(data, dim=0))
+            elif isinstance(data[0], tuple):
+                merged_data.append(self.__merge_batched_data(list(data)))
+            else:
+                merged_data.append(data[0])
+
+        return tuple(merged_data)
+
+    def __beam_search(self, embedding: nn.Embedding, batch_size: int, device: str, cyclic_inputs: Tuple[Any, ...],
+                      constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
+        # Prepare initial data
+        divided_cyclic = self.__divide_batched_data(cyclic_inputs, batch_size)
+        search_nodes = [[BeamSearchNode(self.bos_index, cyclic)] for cyclic in divided_cyclic]
+
+        for _ in range(self.max_output_length):
+            new_nodes = [[] for _ in range(batch_size)]
+            # For each batch of nodes
+            for nodes in zip(*search_nodes):
+                # Divided data is merged into single batch
+                decoder_input, cyclic_inputs = self._preprocess_beam_search_inputs(nodes, device)
+                decoder_input = embedding(decoder_input)
+                predictions, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs,
+                                                                            constant_inputs)
+                # Divide batched data and get top predictions
+                cyclic_inputs = self.__divide_batched_data(cyclic_inputs, batch_size)
+                decoder_out = self.__divide_batched_data(decoder_out, batch_size)
+                top_scores, top_tokens = torch.topk(predictions, self.beam_size)
+
+                # Update nodes with new tokens and scores
+                for i, node in enumerate(nodes):
+                    batch_nodes = []
+                    for token, score in zip(top_tokens[i], top_scores[i]):
+                        new_node = BeamSearchNode.create_new_node(node, token.item(), score.item(), predictions[i],
+                                                                  cyclic_inputs[i], decoder_out[i])
+                        batch_nodes.append(new_node)
+                    new_nodes[i] += batch_nodes
+
+            # Set new nodes with `k` best ones
+            search_nodes.clear()
+            for nodes in new_nodes:
+                nodes = sorted(nodes, reverse=True)[:self.beam_size]  # Get only `k` nodes with highest scores
+                search_nodes.append(nodes)
+
+        best_nodes = next(zip(*search_nodes))
+        # Get sequences without BOS token
+        tokens = torch.stack([torch.tensor(node.sequence[1:], device=device) for node in best_nodes])
+        # Merge data into single batch
+        predictions = torch.stack([torch.stack(node.predictions) for node in best_nodes])
+        decoder_out = list(self.__merge_batched_data([node.decoder_outputs for node in best_nodes]))
+        tokens = torch.transpose(tokens, 0, 1)
+        predictions = torch.transpose(predictions, 0, 1)
+
+        return predictions, tokens, decoder_out
+
+    def __decode_training(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float,
+                          batch_size: int, device: str, cyclic_inputs: Tuple[Any, ...],
+                          constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
+        outputs = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
         decoder_input = outputs[0, :]
-
         predictions = []
         predicted_tokens = []
         decoder_outputs = []
@@ -148,3 +258,12 @@ class BaseRNNDecoder(nn.Module, ABC):
         predicted_tokens = torch.stack(predicted_tokens)
 
         return predictions, predicted_tokens, decoder_outputs
+
+    def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
+                device: str, cyclic_inputs: Tuple[Any, ...],
+                constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
+        if self.training:
+            return self.__decode_training(outputs, embedding, teacher_forcing_ratio, batch_size, device, cyclic_inputs,
+                                          constant_inputs)
+        else:
+            return self.__beam_search(embedding, batch_size, device, cyclic_inputs, constant_inputs)

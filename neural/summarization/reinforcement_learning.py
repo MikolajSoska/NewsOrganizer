@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.distributions import Categorical
 
 import neural.common.layers as layers
-from neural.common.layers.decode import BaseRNNDecoder
+from neural.common.layers.decode import BeamSearchDecoder
 
 
 class Encoder(nn.Module):
@@ -97,7 +97,7 @@ class IntraDecoderAttention(nn.Module):
         return context, previous_hidden
 
 
-class Decoder(BaseRNNDecoder):
+class Decoder(BeamSearchDecoder):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, bos_index: int, unk_index: int,
                  max_summary_length: int,
                  use_intra_attention: bool):

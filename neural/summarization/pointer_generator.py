@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
-from neural.common.layers.decode import BaseRNNDecoder
+from neural.common.layers.decode import BeamSearchDecoder
 
 
 class Encoder(nn.Module):
@@ -65,10 +65,6 @@ class Attention(nn.Module):
             layers.Transpose(0, 1),
             layers.Unsqueeze(1)
         )
-        self.attention_out = nn.Sequential(
-            layers.Squeeze(),
-            layers.Transpose(0, 1)
-        )
         self.context = layers.SequentialMultiInput(
             layers.MatrixProduct(),
             layers.View(-1, 2 * hidden_size)
@@ -96,7 +92,7 @@ class Attention(nn.Module):
         return context, attention, coverage
 
 
-class Decoder(BaseRNNDecoder):
+class Decoder(BeamSearchDecoder):
     def __init__(self, embedding_dim: int, vocab_size: int, hidden_size: int, max_summary_length, bos_index: int,
                  unk_index: int):
         super().__init__(bos_index, max_summary_length)

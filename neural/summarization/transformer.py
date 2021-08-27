@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
-from neural.common.layers.decode import BaseRNNDecoder
+from neural.common.layers.decode import BeamSearchDecoder
 
 
 class PositionalEncoding(nn.Module):
@@ -158,7 +158,7 @@ class DecoderLayer(nn.Module):
         return out, outputs_mask, encoder_out, encoder_mask
 
 
-class Decoder(BaseRNNDecoder):
+class Decoder(BeamSearchDecoder):
     def __init__(self, vocab_size: int, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
                  heads_number: int, feed_forward_size: int, dropout_rate: float, bos_index: int, padding_index: int,
                  max_output_length: int, embedding_weight: Tensor):
