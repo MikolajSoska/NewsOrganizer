@@ -96,10 +96,9 @@ class Attention(nn.Module):
 
 
 class Decoder(BaseRNNDecoder):
-    def __init__(self, vocab_size: int, hidden_size: int, max_summary_length, bos_index: int, unk_index: int,
-                 embedding: nn.Embedding):
-        super().__init__(bos_index, max_summary_length, embedding)
-        embedding_dim = embedding.embedding_dim
+    def __init__(self, embedding_dim: int, vocab_size: int, hidden_size: int, max_summary_length, bos_index: int,
+                 unk_index: int):
+        super().__init__(bos_index, max_summary_length)
         self.unk_index = unk_index
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
@@ -165,7 +164,7 @@ class PointerGeneratorNetwork(nn.Module):
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.encoder = Encoder(embedding_dim, hidden_size)
-        self.decoder = Decoder(vocab_size, hidden_size, max_summary_length, bos_index, unk_index, self.embedding)
+        self.decoder = Decoder(embedding_dim, vocab_size, hidden_size, max_summary_length, bos_index, unk_index)
 
     def activate_coverage(self):
         self.with_coverage = True
@@ -186,8 +185,8 @@ class PointerGeneratorNetwork(nn.Module):
         else:
             coverage = None
 
-        outputs, tokens, decoder_outputs = self.decoder(outputs, teacher_forcing_ratio, batch_size, device,
-                                                        cyclic_inputs=(encoder_hidden, context, coverage),
+        outputs, tokens, decoder_outputs = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size,
+                                                        device, cyclic_inputs=(encoder_hidden, context, coverage),
                                                         constant_inputs=(encoder_out, encoder_features, encoder_mask,
                                                                          inputs_extended, oov_size))
         attention_list, coverage_list = zip(*decoder_outputs)

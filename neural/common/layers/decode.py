@@ -84,11 +84,10 @@ class CRF(nn.Module):
 
 
 class BaseRNNDecoder(nn.Module, ABC):
-    def __init__(self, bos_index: int, max_output_length: int, embedding: nn.Embedding):
+    def __init__(self, bos_index: int, max_output_length: int):
         super().__init__()
         self.bos_index = bos_index
         self.max_output_length = max_output_length
-        self.embedding = embedding
 
     def __validate_outputs(self, outputs: Optional[Tensor], teacher_forcing_ratio: float, batch_size: int,
                            device: str) -> Tuple[Tensor, float]:
@@ -105,9 +104,9 @@ class BaseRNNDecoder(nn.Module, ABC):
 
         return outputs, teacher_forcing_ratio
 
-    def forward(self, outputs: Optional[Tensor], teacher_forcing_ratio: float, batch_size: int, device: str,
-                cyclic_inputs: Tuple[Any, ...], constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor,
-                                                                                           List[Tuple[Any, ...]]]:
+    def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
+                device: str, cyclic_inputs: Tuple[Any, ...],
+                constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
         outputs, teacher_forcing_ratio = self.__validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
         decoder_input = outputs[0, :]
 
@@ -116,7 +115,7 @@ class BaseRNNDecoder(nn.Module, ABC):
         decoder_outputs = []
         for i in range(self.max_output_length):
             decoder_input = self.preprocess_decoder_inputs(decoder_input)
-            decoder_input = self.embedding(decoder_input)
+            decoder_input = embedding(decoder_input)
             prediction, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
             predictions.append(prediction)
             decoder_outputs.append(decoder_out)
