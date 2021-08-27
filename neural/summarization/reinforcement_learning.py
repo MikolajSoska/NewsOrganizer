@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any, List
 
 import torch
 import torch.nn as nn
@@ -6,6 +6,7 @@ from torch import Tensor
 from torch.distributions import Categorical
 
 import neural.common.layers as layers
+from neural.common.layers.decode import BaseRNNDecoder
 
 
 class Encoder(nn.Module):
@@ -99,9 +100,13 @@ class IntraDecoderAttention(nn.Module):
         return context, previous_hidden
 
 
-class Decoder(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, use_intra_attention: bool):
-        super().__init__()
+class Decoder(BaseRNNDecoder):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, bos_index: int, unk_index: int,
+                 max_summary_length: int,
+                 use_intra_attention: bool):
+        super().__init__(bos_index, max_summary_length)
+        self.vocab_size = vocab_size
+        self.unk_index = unk_index
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
         self.encoder_attention = IntraTemporalAttention(hidden_size)
         if use_intra_attention:
@@ -124,12 +129,28 @@ class Decoder(nn.Module):
             nn.Linear(hidden_multiplier * hidden_size, 1),
             nn.Sigmoid()
         )
+        # Used in during decoding loop
+        self.train_rl = False
+        self.log_probabilities = []
 
-    def forward(self, outputs: Tensor, encoder_out: Tensor, encoder_features: Tensor,
-                encoder_hidden: Tuple[Tensor, Tensor], temporal_scores_sum: Optional[Tensor],
-                previous_hidden: Optional[Tensor],
-                texts_extended: Tensor, oov_size: int) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor, Tensor]:
-        hidden, cell = self.lstm(outputs, encoder_hidden)
+    def start_decoding(self, train_rl: bool) -> None:
+        self.train_rl = train_rl
+        self.log_probabilities.clear()
+
+    def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
+                device: str, cyclic_inputs: Tuple[Any, ...],
+                constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
+        predictions, tokens, _ = super().forward(outputs, embedding, teacher_forcing_ratio, batch_size, device,
+                                                 cyclic_inputs, constant_inputs)
+        return predictions, tokens, self.log_probabilities
+
+    def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Tuple[Tensor, Tensor], Tensor, Tensor],
+                     constant_inputs: Tuple[Tensor, Tensor, Tensor, int]) -> \
+            Tuple[Tensor, Tuple[Tuple[Tensor, Tensor], Tensor, Tensor], Tuple[()]]:
+        encoder_hidden, temporal_scores_sum, previous_hidden = cyclic_inputs
+        encoder_out, encoder_features, inputs_extended, oov_size = constant_inputs
+
+        hidden, cell = self.lstm(decoder_input, encoder_hidden)
         decoder_hidden = torch.unsqueeze(hidden, 0)
         encoder_attention, temporal_attention, temporal_scores_sum = \
             self.encoder_attention(decoder_hidden, encoder_out, encoder_features, temporal_scores_sum)
@@ -150,9 +171,24 @@ class Decoder(nn.Module):
             oov_zeros = torch.zeros((batch_size, oov_size), device=vocab_distribution.device)
             vocab_distribution = torch.cat((vocab_distribution, oov_zeros), dim=1)
 
-        final_distribution = torch.scatter_add(vocab_distribution, 1, texts_extended.permute(1, 0), attention)
+        final_distribution = torch.scatter_add(vocab_distribution, 1, inputs_extended.permute(1, 0), attention)
 
-        return final_distribution, (hidden, cell), temporal_scores_sum, previous_hidden
+        return final_distribution, ((hidden, cell), temporal_scores_sum, previous_hidden), ()
+
+    def get_predicted_tokens(self, predictions: Tensor) -> Tensor:
+        if self.train_rl:  # In RL training draw tokens from categorical distribution
+            distribution = Categorical(predictions)
+            tokens = distribution.sample()
+            self.log_probabilities.append((distribution.log_prob(tokens),))  # Append as tuple to match return type
+        else:  # Use simple greedy approach
+            tokens = torch.argmax(predictions, dim=1)
+
+        return tokens
+
+    def preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
+        decoder_inputs[decoder_inputs >= self.vocab_size] = self.unk_index  # Remove OOV tokens
+
+        return decoder_inputs.detach()  # This can be done during training so detach in necessary
 
 
 class ReinforcementSummarization(nn.Module):
@@ -196,43 +232,18 @@ class ReinforcementSummarization(nn.Module):
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
                 outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,
                 train_rl: bool = False) -> Tuple[Tensor, Tensor]:
-        outputs, teacher_forcing_ratio = self.__validate_outputs(inputs, outputs, teacher_forcing_ratio)
-        outputs_length, batch_size = outputs.shape
+        device = inputs.device
+        batch_size = inputs.shape[1]
         inputs_embedded = self.embedding(inputs)
         encoder_out, encoder_features, encoder_hidden = self.encoder(inputs_embedded, inputs_length)
 
-        temporal_attention = None
-        previous_hidden = None
-        predictions = []
-        predicted_tokens = []
-        log_probabilities = []  # Only used in RL training
-        decoder_input = outputs[0, :]
-        for i in range(outputs_length):
-            decoder_input = self.embedding(decoder_input)
-            prediction, encoder_hidden, temporal_attention, previous_hidden = \
-                self.decoder(decoder_input, encoder_out, encoder_features, encoder_hidden, temporal_attention,
-                             previous_hidden, inputs_extended, oov_size)
-            predictions.append(prediction)
-
-            if train_rl:  # In RL training draw tokens from categorical distribution
-                distribution = Categorical(prediction)
-                tokens = distribution.sample()
-                tokens[tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
-                log_probabilities.append(distribution.log_prob(tokens))
-            else:  # Use simple greed approach
-                tokens = torch.argmax(prediction, dim=1)
-                tokens[tokens >= self.vocab_size] = self.unk_index  # Remove OOV tokens
-
-            tokens = tokens.detach()
-            predicted_tokens.append(tokens)
-
-            if i + 1 < outputs_length:
-                use_predictions = torch.as_tensor(torch.rand(batch_size, device=inputs.device) >= teacher_forcing_ratio)
-                # Depending on the value of `use_predictions` in next step decoder will use predicted tokens or
-                # ground truth values (teacher forcing)
-                decoder_input = torch.where(use_predictions, tokens, outputs[i, :])
-
+        self.decoder.start_decoding(train_rl)
+        outputs, tokens, log_probabilities = self.decoder(outputs, self.embedding, teacher_forcing_ratio, batch_size,
+                                                          device, cyclic_inputs=(encoder_hidden, None, None),
+                                                          constant_inputs=(encoder_out, encoder_features,
+                                                                           inputs_extended, oov_size))
+        log_probabilities = [log_prob[0] for log_prob in log_probabilities]  # Get rid of tuple
         if train_rl:  # Return log probabilities used in RL loss function
-            return torch.stack(log_probabilities), torch.stack(predicted_tokens)
+            return torch.stack(log_probabilities), tokens
         else:
-            return torch.stack(predictions), torch.stack(predicted_tokens)
+            return outputs, tokens
