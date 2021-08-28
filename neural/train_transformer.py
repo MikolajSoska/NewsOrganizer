@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--adam-betas', type=float, default=[0.9, 0.98], nargs=2, help='Betas for Adam optimizer')
     parser.add_argument('--adam-eps', type=float, default=1e-9, help='Epsilon value for Adam optimizer')
     parser.add_argument('--label-smoothing', type=float, default=0.1, help='Label smoothing value')
+    parser.add_argument('--beam-size', type=int, default=4, help='Beam size for beam search decoding')
 
     parser = add_base_train_args(parser)
 
@@ -53,7 +54,7 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score
 
 
-def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int, padding_index: int) -> Transformer:
+def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int) -> Transformer:
     return Transformer(
         encoder_layers=args.encoder_layers,
         decoder_layers=args.decoder_layers,
@@ -67,7 +68,7 @@ def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: 
         max_summary_length=args.max_summary_length,
         bos_index=bos_index,
         eos_index=eos_index,
-        padding_index=padding_index
+        beam_size=args.beam_size
     )
 
 
@@ -94,8 +95,7 @@ def main() -> None:
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
-    pad_index = vocab.stoi[SpecialTokens.PAD.value]
-    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index, padding_index=pad_index)
+    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index)
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 

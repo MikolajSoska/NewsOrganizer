@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
                         help='Which pretrained embeddings use')
     parser.add_argument('--embedding-size', type=int, default=100, help='Size of embeddings (if no pretrained')
     parser.add_argument('--embedding-path', type=Path, default='../data/saved/embeddings', help='Path to embeddings')
+    parser.add_argument('--beam-size', type=int, default=5, help='Beam size for beam search decoding')
     parser = add_base_train_args(parser)
 
     return parser.parse_args()
@@ -118,7 +119,8 @@ def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: 
         unk_index=unk_index,
         embedding_dim=args.embedding_size,
         embeddings=embeddings,
-        use_intra_attention=args.intra_attention
+        use_intra_attention=args.intra_attention,
+        beam_size=args.beam_size
     )
 
 

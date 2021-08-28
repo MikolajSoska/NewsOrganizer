@@ -99,8 +99,8 @@ class IntraDecoderAttention(nn.Module):
 
 class Decoder(BeamSearchDecoder):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, bos_index: int, eos_index: int,
-                 unk_index: int, max_summary_length: int, use_intra_attention: bool):
-        super().__init__(bos_index, eos_index, max_summary_length)
+                 unk_index: int, max_summary_length: int, use_intra_attention: bool, beam_size: int):
+        super().__init__(bos_index, eos_index, max_summary_length, beam_size)
         self.vocab_size = vocab_size
         self.unk_index = unk_index
         self.lstm = nn.LSTMCell(input_size=embedding_dim, hidden_size=hidden_size)
@@ -192,7 +192,7 @@ class Decoder(BeamSearchDecoder):
 
 class ReinforcementSummarization(nn.Module):
     def __init__(self, vocab_size: int, hidden_size: int, max_summary_length: int, bos_index: int, eos_index: int,
-                 unk_index: int, embedding_dim: int = None, embeddings: Tensor = None,
+                 unk_index: int, beam_size: int, embedding_dim: int = None, embeddings: Tensor = None,
                  use_intra_attention: bool = True):
         if embeddings is None and embedding_dim is None:
             raise ValueError('Either embeddings vector or embedding dim must be passed.')
@@ -207,7 +207,7 @@ class ReinforcementSummarization(nn.Module):
 
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size, bos_index, eos_index, unk_index,
-                               max_summary_length, use_intra_attention)
+                               max_summary_length, use_intra_attention, beam_size)
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
                 outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,

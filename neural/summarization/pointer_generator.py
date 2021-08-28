@@ -94,8 +94,8 @@ class Attention(nn.Module):
 
 class Decoder(BeamSearchDecoder):
     def __init__(self, embedding_dim: int, vocab_size: int, hidden_size: int, max_summary_length, bos_index: int,
-                 eos_index: int, unk_index: int):
-        super().__init__(bos_index, eos_index, max_summary_length)
+                 eos_index: int, unk_index: int, beam_size: int):
+        super().__init__(bos_index, eos_index, max_summary_length, beam_size)
         self.unk_index = unk_index
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
@@ -152,14 +152,14 @@ class Decoder(BeamSearchDecoder):
 
 class PointerGeneratorNetwork(nn.Module):
     def __init__(self, vocab_size: int, bos_index: int, eos_index: int, unk_index: int, embedding_dim: int,
-                 hidden_size: int, max_summary_length: int):
+                 hidden_size: int, max_summary_length: int, beam_size: int):
         super().__init__()
         self.hidden_size = hidden_size
         self.with_coverage = False  # Coverage is active only during last phase of training
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(embedding_dim, vocab_size, hidden_size, max_summary_length, bos_index, eos_index,
-                               unk_index)
+                               unk_index, beam_size)
 
     def activate_coverage(self):
         self.with_coverage = True

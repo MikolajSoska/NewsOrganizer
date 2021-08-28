@@ -126,8 +126,7 @@ class BeamSearchNode:
 
 
 class BeamSearchDecoder(nn.Module, ABC):
-    def __init__(self, bos_index: int, eos_index: int, max_output_length: int,
-                 beam_size: int = 4):  # todo remove default beam size
+    def __init__(self, bos_index: int, eos_index: int, max_output_length: int, beam_size: int):
         super().__init__()
         self.bos_index = bos_index
         self.eos_index = eos_index

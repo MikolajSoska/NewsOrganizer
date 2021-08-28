@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lr', type=float, default=0.15, help='Learning rate')
     parser.add_argument('--init_acc_value', type=float, default=0.1, help='Initial accumulator value for Adagrad')
     parser.add_argument('--max-gradient-norm', type=int, default=2, help='Max norm for gradient clipping')
+    parser.add_argument('--beam-size', type=int, default=4, help='Beam size for beam search decoding')
     parser = add_base_train_args(parser)
 
     return parser.parse_args()
@@ -78,7 +79,8 @@ def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: 
         unk_index=unk_index,
         embedding_dim=args.embedding_size,
         hidden_size=args.hidden_size,
-        max_summary_length=args.max_summary_length
+        max_summary_length=args.max_summary_length,
+        beam_size=args.beam_size
     )
 
 
