@@ -1,4 +1,6 @@
 import os
+import pickle
+import re
 import shutil
 import sys
 import zipfile
@@ -21,6 +23,8 @@ class DatasetGenerator:
             return cls.__generate_cnn_dailymail(split, for_vocab)
         elif dataset_name == 'xsum':
             return cls.__generate_xsum(split, for_vocab)
+        elif dataset_name == 'psc':
+            return cls.__generate_psc(split, for_vocab)
         elif dataset_name == 'conll2003':
             return cls.__generate_conll2003(split, for_vocab)
         elif dataset_name == 'gmb':
@@ -45,6 +49,62 @@ class DatasetGenerator:
         summaries = dataset['summary']
 
         return cls.__generate_summarization_dataset(texts, summaries, for_vocab)
+
+    @classmethod
+    def __generate_psc(cls, split: str, for_vocab: bool) -> Iterator[Tuple[List[str], ...]]:
+        # This dataset has only train split, so other has to be created manually
+        dataset = datasets.load_dataset('polsum', split='train')
+        dataset = dataset.to_dict()
+        split_indexes = cls.__get_psc_splits(dataset, split)
+
+        texts = []
+        summaries = []
+        counter = 0
+        for text, summary_dict in zip(dataset['body'], dataset['summaries']):
+            text = re.sub(' +', ' ', text.replace('\n', ' '))  # Remove new lines and double spaces
+            for summary_type, summary in zip(summary_dict['type'], summary_dict['body']):
+                if summary_type == 'abstract':
+                    if counter in split_indexes:
+                        summary = re.sub(' +', ' ', summary.replace('\n', ' '))  # Remove new lines and double spaces
+                        texts.append(text)
+                        summaries.append(summary)
+                    counter += 1
+
+        assert len(split_indexes) == len(texts) == len(split_indexes)
+        return cls.__generate_summarization_dataset(texts, summaries, for_vocab)
+
+    @classmethod
+    def __get_psc_splits(cls, dataset: Dict[str, Any], split: str) -> List[int]:
+        dataset_dir = Path.home() / '.cache' / 'datasets' / 'psc_dataset'
+        if not dataset_dir.exists():
+            cls.__create_psc_splits(dataset, dataset_dir)
+
+        with open(dataset_dir / f'{split}.pkl', 'rb') as split_file:
+            split_indexes = pickle.load(split_file)
+
+        return sorted(split_indexes)
+
+    @staticmethod
+    def __create_psc_splits(dataset: Dict[str, Any], dataset_dir: Path) -> None:
+        print('Creating PSC dataset splits...')
+        indexes = []
+        for summary_dict in dataset['summaries']:
+            for summary_type in summary_dict['type']:
+                if summary_type == 'abstract':
+                    indexes.append(len(indexes))
+
+        # Train, test, validation spit
+        train_indexes, test_indexes = train_test_split(indexes, test_size=0.15, random_state=0)
+        train_indexes, val_indexes = train_test_split(train_indexes, test_size=0.15, random_state=0)
+        dataset_dir.mkdir(parents=True, exist_ok=False)
+
+        with open(dataset_dir / 'train.pkl', 'wb') as train_file:
+            pickle.dump(train_indexes, train_file)
+        with open(dataset_dir / 'validation.pkl', 'wb') as val_file:
+            pickle.dump(val_indexes, val_file)
+        with open(dataset_dir / 'test.pkl', 'wb') as test_file:
+            pickle.dump(test_indexes, test_file)
+        print('PSC dataset splits saved.')
 
     @staticmethod
     def __generate_summarization_dataset(texts: List[str], summaries: List[str],
