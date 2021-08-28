@@ -86,22 +86,29 @@ class CRF(nn.Module):
 
 
 class BeamSearchNode:
-    def __init__(self, bos_index: int, cyclic_input: Tuple[Any, ...], device: str, create_empty: bool = False):
+    def __init__(self, bos_index: int, eos_index: int, cyclic_input: Tuple[Any, ...], device: str,
+                 create_empty: bool = False):
         self.score = 0.
         self.sequence = [torch.tensor(bos_index, device=device)] if not create_empty else []
         self.predictions = []
         self.cyclic_inputs = [cyclic_input] if not create_empty else []
         self.decoder_outputs = []
+        self.eos_mask = 1
+        self.eos_index = eos_index
 
     @classmethod
     def create_new_node(cls, node: BeamSearchNode, token: Tensor, score: float, prediction: Tensor,
                         cyclic_inputs: Tuple[Any, ...], decoder_outputs: Tuple[Any, ...]) -> BeamSearchNode:
-        new_node = cls(0, (), '', create_empty=True)  # Create empty node and override its data
-        new_node.score = node.score + score
+        new_node = cls(0, 0, (), '', create_empty=True)  # Create empty node and override its data
+        new_node.score = node.score + score * node.eos_mask
         new_node.sequence = node.sequence + [token]
         new_node.predictions = node.predictions + [prediction]
         new_node.cyclic_inputs = node.cyclic_inputs + [cyclic_inputs]
         new_node.decoder_outputs = node.decoder_outputs + [decoder_outputs]
+        new_node.eos_index = node.eos_index
+        new_node.eos_mask = node.eos_mask
+        if new_node.eos_mask == 1 and token == node.eos_index:
+            new_node.eos_mask = 0
 
         return new_node
 
@@ -119,9 +126,11 @@ class BeamSearchNode:
 
 
 class BeamSearchDecoder(nn.Module, ABC):
-    def __init__(self, bos_index: int, max_output_length: int, beam_size: int = 4):  # todo remove default beam size
+    def __init__(self, bos_index: int, eos_index: int, max_output_length: int,
+                 beam_size: int = 4):  # todo remove default beam size
         super().__init__()
         self.bos_index = bos_index
+        self.eos_index = eos_index
         self.max_output_length = max_output_length
         self.beam_size = beam_size
 
@@ -183,7 +192,7 @@ class BeamSearchDecoder(nn.Module, ABC):
                       constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
         # Prepare initial data
         divided_cyclic = self.__divide_batched_data(cyclic_inputs, batch_size)
-        search_nodes = [[BeamSearchNode(self.bos_index, cyclic, device)] for cyclic in divided_cyclic]
+        search_nodes = [[BeamSearchNode(self.bos_index, self.eos_index, cyclic, device)] for cyclic in divided_cyclic]
 
         for _ in range(self.max_output_length):
             new_nodes = [[] for _ in range(batch_size)]

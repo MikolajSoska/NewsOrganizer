@@ -107,10 +107,19 @@ def __update_training_phase(trainer: Trainer) -> None:
             params['lr'] = trainer.params.normal_lr
 
 
-def create_model_from_args(args: argparse.Namespace, bos_index: int, unk_index: int,
+def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int, unk_index: int,
                            embeddings: Tensor = None) -> ReinforcementSummarization:
-    return ReinforcementSummarization(args.vocab_size + len(SpecialTokens), args.hidden_size, args.max_summary_length,
-                                      bos_index, unk_index, args.embedding_size, embeddings, args.intra_attention)
+    return ReinforcementSummarization(
+        vocab_size=args.vocab_size + len(SpecialTokens),
+        hidden_size=args.hidden_size,
+        max_summary_length=args.max_summary_length,
+        bos_index=bos_index,
+        eos_index=eos_index,
+        unk_index=unk_index,
+        embedding_dim=args.embedding_size,
+        embeddings=embeddings,
+        use_intra_attention=args.intra_attention
+    )
 
 
 def main() -> None:
@@ -145,7 +154,9 @@ def main() -> None:
     validation_loader = dataloader(validation_dataset)
     test_loader = dataloader(test_dataset)
 
-    model = create_model_from_args(args, bos_index=vocab.stoi[SpecialTokens.BOS.value], unk_index=vocab.unk_index,
+    bos_index = vocab.stoi[SpecialTokens.BOS.value]
+    eos_index = vocab.stoi[SpecialTokens.EOS.value]
+    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index, unk_index=vocab.unk_index,
                                    embeddings=embeddings)
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)

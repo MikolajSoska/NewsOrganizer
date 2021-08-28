@@ -160,9 +160,9 @@ class DecoderLayer(nn.Module):
 
 class Decoder(BeamSearchDecoder):
     def __init__(self, vocab_size: int, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
-                 heads_number: int, feed_forward_size: int, dropout_rate: float, bos_index: int, padding_index: int,
-                 max_output_length: int, embedding_weight: Tensor):
-        super().__init__(bos_index, max_output_length)
+                 heads_number: int, feed_forward_size: int, dropout_rate: float, bos_index: int, eos_index: int,
+                 padding_index: int, max_output_length: int, embedding_weight: Tensor):
+        super().__init__(bos_index, eos_index, max_output_length)
         self.padding_index = padding_index
         self.layer_norm = nn.LayerNorm(embedding_dim, eps=1e-6)
         self.decoders = layers.SequentialMultiInput(
@@ -219,7 +219,7 @@ class Decoder(BeamSearchDecoder):
 class Transformer(nn.Module):
     def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
                  key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
-                 dropout_rate: float, max_summary_length: int, bos_index: int, padding_index: int = 0):
+                 dropout_rate: float, max_summary_length: int, bos_index: int, eos_index: int, padding_index: int = 0):
         super().__init__()
         self.max_summary_length = max_summary_length
         self.bos_index = bos_index
@@ -232,7 +232,7 @@ class Transformer(nn.Module):
         self.encoder = Encoder(encoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
                                feed_forward_size, dropout_rate)
         self.decoder = Decoder(vocab_size, decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
-                               feed_forward_size, dropout_rate, bos_index, padding_index, max_summary_length,
+                               feed_forward_size, dropout_rate, bos_index, eos_index, padding_index, max_summary_length,
                                self.embedding[0].weight)
 
     @staticmethod
