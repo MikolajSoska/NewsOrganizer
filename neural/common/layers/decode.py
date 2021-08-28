@@ -86,17 +86,17 @@ class CRF(nn.Module):
 
 
 class BeamSearchNode:
-    def __init__(self, bos_index: int, cyclic_input: Tuple[Any, ...]):
+    def __init__(self, bos_index: int, cyclic_input: Tuple[Any, ...], device: str, create_empty: bool = False):
         self.score = 0.
-        self.sequence = [bos_index]
+        self.sequence = [torch.tensor(bos_index, device=device)] if not create_empty else []
         self.predictions = []
-        self.cyclic_inputs = [cyclic_input]
+        self.cyclic_inputs = [cyclic_input] if not create_empty else []
         self.decoder_outputs = []
 
     @classmethod
-    def create_new_node(cls, node: BeamSearchNode, token: int, score: float, prediction: Tensor,
+    def create_new_node(cls, node: BeamSearchNode, token: Tensor, score: float, prediction: Tensor,
                         cyclic_inputs: Tuple[Any, ...], decoder_outputs: Tuple[Any, ...]) -> BeamSearchNode:
-        new_node = cls(node.sequence[0], node.cyclic_inputs[0])
+        new_node = cls(0, (), '', create_empty=True)  # Create empty node and override its data
         new_node.score = node.score + score
         new_node.sequence = node.sequence + [token]
         new_node.predictions = node.predictions + [prediction]
@@ -136,9 +136,8 @@ class BeamSearchDecoder(nn.Module, ABC):
     def _preprocess_decoder_inputs(self, decoder_inputs: Tensor) -> Tensor:
         return decoder_inputs
 
-    def _preprocess_beam_search_inputs(self, nodes: Tuple[BeamSearchNode],
-                                       device: str) -> Tuple[Tensor, Tuple[Any, ...]]:
-        decoder_input = torch.tensor([node.sequence[-1] for node in nodes], device=device)
+    def _preprocess_beam_search_inputs(self, nodes: Tuple[BeamSearchNode]) -> Tuple[Tensor, Tuple[Any, ...]]:
+        decoder_input = torch.stack([node.sequence[-1] for node in nodes])
         cyclic_inputs = self.__merge_batched_data([node.cyclic_inputs[-1] for node in nodes])
         return self._preprocess_decoder_inputs(decoder_input), cyclic_inputs
 
@@ -158,7 +157,7 @@ class BeamSearchDecoder(nn.Module, ABC):
         for data in batched_data:
             if isinstance(data, Tensor):
                 for i in range(batch_size):
-                    divided_data[i].append(data[i].unsqueeze(0))
+                    divided_data[i].append(data[i:i + 1])  # One element slice to keep tensor dim
             elif isinstance(data, tuple):
                 for i, divided in enumerate(self.__divide_batched_data(data, batch_size)):
                     divided_data[i].append(divided)
@@ -184,14 +183,14 @@ class BeamSearchDecoder(nn.Module, ABC):
                       constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
         # Prepare initial data
         divided_cyclic = self.__divide_batched_data(cyclic_inputs, batch_size)
-        search_nodes = [[BeamSearchNode(self.bos_index, cyclic)] for cyclic in divided_cyclic]
+        search_nodes = [[BeamSearchNode(self.bos_index, cyclic, device)] for cyclic in divided_cyclic]
 
         for _ in range(self.max_output_length):
             new_nodes = [[] for _ in range(batch_size)]
             # For each batch of nodes
             for nodes in zip(*search_nodes):
                 # Divided data is merged into single batch
-                decoder_input, cyclic_inputs = self._preprocess_beam_search_inputs(nodes, device)
+                decoder_input, cyclic_inputs = self._preprocess_beam_search_inputs(nodes)
                 decoder_input = embedding(decoder_input)
                 predictions, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs,
                                                                             constant_inputs)
@@ -199,12 +198,13 @@ class BeamSearchDecoder(nn.Module, ABC):
                 cyclic_inputs = self.__divide_batched_data(cyclic_inputs, batch_size)
                 decoder_out = self.__divide_batched_data(decoder_out, batch_size)
                 top_scores, top_tokens = torch.topk(predictions, self.beam_size)
+                top_scores = torch.log(top_scores).tolist()
 
                 # Update nodes with new tokens and scores
                 for i, node in enumerate(nodes):
                     batch_nodes = []
                     for token, score in zip(top_tokens[i], top_scores[i]):
-                        new_node = BeamSearchNode.create_new_node(node, token.item(), score.item(), predictions[i],
+                        new_node = BeamSearchNode.create_new_node(node, token, score, predictions[i],
                                                                   cyclic_inputs[i], decoder_out[i])
                         batch_nodes.append(new_node)
                     new_nodes[i] += batch_nodes
@@ -217,7 +217,7 @@ class BeamSearchDecoder(nn.Module, ABC):
 
         best_nodes = next(zip(*search_nodes))
         # Get sequences without BOS token
-        tokens = torch.stack([torch.tensor(node.sequence[1:], device=device) for node in best_nodes])
+        tokens = torch.stack([torch.stack(node.sequence[1:]) for node in best_nodes])
         # Merge data into single batch
         predictions = torch.stack([torch.stack(node.predictions) for node in best_nodes])
         decoder_out = list(self.__merge_batched_data([node.decoder_outputs for node in best_nodes]))
