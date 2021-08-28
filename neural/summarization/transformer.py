@@ -1,12 +1,12 @@
 import math
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
-from neural.common.layers.decode import BeamSearchDecoder
+from neural.common.layers.decode import BeamSearchDecoder, BeamSearchNode
 
 
 class PositionalEncoding(nn.Module):
@@ -162,7 +162,7 @@ class Decoder(BeamSearchDecoder):
     def __init__(self, vocab_size: int, decoder_layers: int, embedding_dim: int, key_and_query_dim: int, value_dim: int,
                  heads_number: int, feed_forward_size: int, dropout_rate: float, bos_index: int, eos_index: int,
                  max_output_length: int, embedding_weight: Tensor, beam_size: int):
-        super().__init__(bos_index, eos_index, max_output_length, beam_size)
+        super().__init__(bos_index, eos_index, max_output_length, beam_size, embedding_before_step=False)
         self.padding_index = 0
         self.layer_norm = nn.LayerNorm(embedding_dim, eps=1e-6)
         self.decoders = layers.SequentialMultiInput(
@@ -191,27 +191,29 @@ class Decoder(BeamSearchDecoder):
         outputs_embedded = embedding(decoder_input)
         outputs_embedded = self.layer_norm(outputs_embedded)
         decoder_out, _, _, _ = self.decoders(outputs_embedded, outputs_mask, encoder_out, encoder_mask)
+        out = self.out(decoder_out)
+        if not self.training:  # In validation phase return prediction only for the last item in sequence
+            out = out[-1]
 
-        return self.out(decoder_out), (), ()
+        return out, (), ()
+
+    def _preprocess_beam_search_inputs(self, nodes: Tuple[BeamSearchNode]) -> Tuple[Tensor, Tuple[Any, ...]]:
+        decoder_input = torch.stack([torch.stack(node.sequence) for node in nodes])
+        decoder_input = torch.transpose(decoder_input, 0, 1)
+        return self._preprocess_decoder_inputs(decoder_input), ()
 
     def forward(self, outputs: Optional[Tensor], embedding: nn.Embedding, teacher_forcing_ratio: float, batch_size: int,
                 device: str, cyclic_inputs: Tuple[()],
                 constant_inputs: Tuple[Tensor, Tensor, nn.Embedding]) -> Tuple[Tensor, Tensor, List[None]]:
-        outputs, teacher_forcing_ratio = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
+        outputs = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
 
-        # Custom forward for this model depending on phase
-        if self.training and teacher_forcing_ratio == 1.0:
+        # Custom forward model training
+        if self.training:
             predictions, _, _ = self.decoder_step(outputs, cyclic_inputs, constant_inputs)
             tokens = self._get_predicted_tokens(predictions)
-        else:
-            predictions = None
-            for i in range(self.max_output_length):
-                decoder_input = outputs[:i + 1, :]
-                predictions_step, _, _ = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
-                predictions = predictions_step
-                if i + 1 < self.max_output_length:
-                    outputs[1:i + 2, :] = self._get_predicted_tokens(predictions_step)
-            tokens = self._get_predicted_tokens(predictions)
+        else:  # Beam search in validation phase
+            predictions, tokens, _, = super().forward(outputs, embedding, teacher_forcing_ratio, batch_size, device,
+                                                      cyclic_inputs, constant_inputs)
 
         return predictions, tokens, []
 

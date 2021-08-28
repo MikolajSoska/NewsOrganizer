@@ -126,12 +126,14 @@ class BeamSearchNode:
 
 
 class BeamSearchDecoder(nn.Module, ABC):
-    def __init__(self, bos_index: int, eos_index: int, max_output_length: int, beam_size: int):
+    def __init__(self, bos_index: int, eos_index: int, max_output_length: int, beam_size: int,
+                 embedding_before_step: bool = True):
         super().__init__()
         self.bos_index = bos_index
         self.eos_index = eos_index
         self.max_output_length = max_output_length
         self.beam_size = beam_size
+        self.embedding_before_step = embedding_before_step
 
     @abstractmethod
     def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Any, ...],
@@ -199,7 +201,8 @@ class BeamSearchDecoder(nn.Module, ABC):
             for nodes in zip(*search_nodes):
                 # Divided data is merged into single batch
                 decoder_input, cyclic_inputs = self._preprocess_beam_search_inputs(nodes)
-                decoder_input = embedding(decoder_input)
+                if self.embedding_before_step:
+                    decoder_input = embedding(decoder_input)
                 predictions, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs,
                                                                             constant_inputs)
                 # Divide batched data and get top predictions

@@ -1,3 +1,4 @@
+from itertools import zip_longest
 from typing import Tuple, Optional, Any, List
 
 import torch
@@ -139,7 +140,7 @@ class Decoder(BeamSearchDecoder):
         predictions, tokens, attention_list = super().forward(outputs, embedding, teacher_forcing_ratio, batch_size,
                                                               device, cyclic_inputs, constant_inputs)
         decoder_output = [(log_prob, attention[0]) for log_prob, attention in
-                          zip(self.log_probabilities, attention_list)]
+                          zip_longest(self.log_probabilities, attention_list)]
         return predictions, tokens, decoder_output
 
     def decoder_step(self, decoder_input: Tensor, cyclic_inputs: Tuple[Tuple[Tensor, Tensor], Tensor, Tensor],
@@ -180,7 +181,6 @@ class Decoder(BeamSearchDecoder):
             self.log_probabilities.append(distribution.log_prob(tokens))
         else:  # Use simple greedy approach
             tokens = torch.argmax(predictions, dim=1)
-            self.log_probabilities.append(None)  # To match other outputs length
 
         return tokens
 

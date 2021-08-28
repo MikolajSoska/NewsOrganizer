@@ -84,14 +84,14 @@ def main() -> None:
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=False,
                       data_dir=args.data_path)
     # Predictions and targets always have the same size, so no need to extra padding
-    dataloader = partial(SummarizationDataLoader, batch_size=args.batch, pad_to_max=False)
+    dataloader = partial(SummarizationDataLoader, batch_size=args.batch)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
-    train_loader = dataloader(train_dataset)
-    validation_loader = dataloader(validation_dataset)
-    test_loader = dataloader(test_dataset)
+    train_loader = dataloader(train_dataset, pad_to_max=False)
+    validation_loader = dataloader(validation_dataset, pad_to_max=True)
+    test_loader = dataloader(test_dataset, pad_to_max=True)
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
