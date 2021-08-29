@@ -241,11 +241,12 @@ class BeamSearchDecoder(nn.Module, ABC):
                           batch_size: int, device: str, cyclic_inputs: Tuple[Any, ...],
                           constant_inputs: Tuple[Any, ...]) -> Tuple[Tensor, Tensor, List[Tuple[Any, ...]]]:
         outputs = self._validate_outputs(outputs, teacher_forcing_ratio, batch_size, device)
+        sequence_length = outputs.shape[0]  # If data is not padded to max, decoding steps are shorter than max
         decoder_input = outputs[0, :]
         predictions = []
         predicted_tokens = []
         decoder_outputs = []
-        for i in range(self.max_output_length):
+        for i in range(sequence_length):
             decoder_input = self._preprocess_decoder_inputs(decoder_input)
             decoder_input = embedding(decoder_input)
             prediction, cyclic_inputs, decoder_out = self.decoder_step(decoder_input, cyclic_inputs, constant_inputs)
@@ -256,7 +257,7 @@ class BeamSearchDecoder(nn.Module, ABC):
             tokens = tokens.detach()
             predicted_tokens.append(tokens)
 
-            if i + 1 < self.max_output_length:
+            if i + 1 < sequence_length:
                 if teacher_forcing_ratio <= 1:
                     use_predictions = torch.as_tensor(torch.rand(batch_size, device=device) >= teacher_forcing_ratio)
                     # Depending on the value of `use_predictions` in next step decoder will use predicted tokens or

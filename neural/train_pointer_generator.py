@@ -100,7 +100,8 @@ def main() -> None:
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
-    train_loader = dataloader(train_dataset)
+    # During training there is no need to max padding due to `teacher_forcing_ratio` = 1
+    train_loader = dataloader(train_dataset, pad_to_max=False)
     validation_loader = dataloader(validation_dataset)
     test_loader = dataloader(test_dataset)
 
