@@ -56,7 +56,7 @@ class Attention(nn.Module):
         self.attention_first = nn.Sequential(
             nn.Tanh(),
             nn.Linear(2 * hidden_size, 1, bias=False),
-            layers.Squeeze(),
+            layers.Squeeze(-1),
             nn.Softmax(dim=0)
         )
         self.attention_second = nn.Sequential(

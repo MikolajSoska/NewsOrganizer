@@ -163,7 +163,7 @@ class Decoder(BeamSearchDecoder):
             pointer_probability = self.pointer_probability(decoder_hidden, encoder_attention)
 
         vocab_distribution = (1 - pointer_probability) * vocab_distribution
-        attention = pointer_probability * temporal_attention.squeeze()
+        attention = pointer_probability * temporal_attention.squeeze(dim=1)
 
         if oov_size > 0:  # Add distribution for OOV words (with 0 value) to match dims
             batch_size = vocab_distribution.shape[0]
