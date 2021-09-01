@@ -20,6 +20,7 @@ from neural.summarization.reinforcement_learning import ReinforcementSummarizati
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for ML+RL model training.')
+    parser.add_argument('--experiment-name', type=str, default='reinforcement_learning', help='Name of the experiment')
     parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=30, help='Training epochs')
     parser.add_argument('--batch', type=int, default=8, help='Batch size')
@@ -128,8 +129,7 @@ def main() -> None:
     args = parse_args()
     assert args.train_ml or args.train_rl, 'At least one training method need to be specified'
     utils.set_random_seed(args.seed)
-    model_name = 'reinforcement_learning'
-    utils.dump_args_to_file(args, args.model_path / model_name)
+    utils.dump_args_to_file(args, args.model_path / args.experiment_name)
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
                                      vocab_dir=args.vocab_path)
@@ -169,7 +169,7 @@ def main() -> None:
         max_gradient_norm=None,
         model_save_path=args.model_path,
         log_save_path=args.logs_path,
-        model_name=model_name,
+        model_name=args.experiment_name,
         use_cuda=args.use_gpu,
         cuda_index=args.gpu_index,
         validation_scores=[rouge],

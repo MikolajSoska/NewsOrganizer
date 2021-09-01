@@ -17,6 +17,7 @@ from neural.summarization.transformer import Transformer
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for Transformer model training.')
+    parser.add_argument('--experiment-name', type=str, default='transformer', help='Name of the experiment')
     parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch', type=int, default=4, help='Batch size')
@@ -75,8 +76,7 @@ def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: 
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
-    model_name = 'transformer'
-    dump_args_to_file(args, args.model_path / model_name)
+    dump_args_to_file(args, args.model_path / args.experiment_name)
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
                                      vocab_dir=args.vocab_path)
@@ -105,7 +105,7 @@ def main() -> None:
         max_gradient_norm=None,
         model_save_path=args.model_path,
         log_save_path=args.logs_path,
-        model_name=model_name,
+        model_name=args.experiment_name,
         use_cuda=args.use_gpu,
         cuda_index=args.gpu_index,
         validation_scores=[rouge],

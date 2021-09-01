@@ -21,6 +21,7 @@ from utils.database import DatabaseConnector
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Parameters for BiLSTM-CRF model training.')
+    parser.add_argument('--experiment-name', type=str, default='bilstm_crf', help='Name of the experiment')
     parser.add_argument('--dataset', choices=['conll2003', 'gmb'], default='conll2003', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch', type=int, default=128, help='Batch size')
@@ -77,8 +78,7 @@ def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
 
-    model_name = 'bilstm_crf'
-    dump_args_to_file(args, args.model_path / model_name)
+    dump_args_to_file(args, args.model_path / args.experiment_name)
     vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path,
                                      digits_to_zero=True)
 
@@ -112,7 +112,7 @@ def main() -> None:
         max_gradient_norm=args.max_gradient_norm,
         model_save_path=args.model_path,
         log_save_path=args.logs_path,
-        model_name=model_name,
+        model_name=args.experiment_name,
         use_cuda=args.use_gpu,
         cuda_index=args.gpu_index,
         scores=[Precision(), Recall(), F1Score()]
