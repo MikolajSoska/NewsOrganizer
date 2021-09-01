@@ -26,10 +26,10 @@ def convert_bytes_to_megabytes(bytes_number: int) -> float:
     return round(bytes_number / (1024 ** 2), 2)
 
 
-def get_device(use_cuda: bool, log_method: Callable[[str], None] = print) -> torch.device:
+def get_device(use_cuda: bool, cuda_index: int, log_method: Callable[[str], None] = print) -> torch.device:
     if use_cuda:
         if torch.cuda.is_available():
-            device = torch.device('cuda')
+            device = torch.device(f'cuda:{cuda_index}')
             device_properties = torch.cuda.get_device_properties(device)
             device_name = f'CUDA ({device_properties.name}), ' \
                           f'Total memory: {convert_bytes_to_megabytes(device_properties.total_memory):g} MB'

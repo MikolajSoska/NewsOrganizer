@@ -26,7 +26,7 @@ from neural.common.utils import convert_bytes_to_megabytes, get_device
 class Trainer:
     def __init__(self, train_step: Callable[[Trainer, Tuple[Any, ...]], Tuple[Tensor, ScoreValue]], epochs: int,
                  max_gradient_norm: Optional[int], model_save_path: Path, log_save_path: Path, model_name: str,
-                 use_cuda: bool, load_checkpoint: bool, max_model_backup: int = 3, scores: List[Scorer] = None,
+                 use_cuda: bool, cuda_index: int, max_model_backup: int = 3, scores: List[Scorer] = None,
                  validation_scores: List[Scorer] = None, test_scores: List[Scorer] = None, **params: Any):
         self.model: Optional[DotMap[str, nn.Module]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
@@ -38,8 +38,8 @@ class Trainer:
         self.model_save_path = self.__get_save_dir(model_save_path)
         self.log_save_path = self.__get_save_dir(log_save_path)
         self.logger = self.__setup_logger()
-        self.device = get_device(use_cuda, log_method=self.logger.info)
-        self.load_checkpoint = load_checkpoint
+        self.device = get_device(use_cuda, cuda_index, log_method=self.logger.info)
+        self.cuda_index = cuda_index
         self.max_model_backup = max_model_backup
         self.train_scores = scores
         self.validation_scores = validation_scores or scores
@@ -78,7 +78,6 @@ class Trainer:
         if oom_occurred:
             torch.cuda.empty_cache()
             gc.collect()
-            self.load_checkpoint = True  # Restart from checkpoint
             self.train(train_loader, validation_loader, verbosity, save_interval)
 
     def eval(self, test_loader: DataLoader) -> None:
@@ -108,11 +107,7 @@ class Trainer:
 
     def __train(self, train_loader: DataLoader, validation_loader: Optional[DataLoader], verbosity: int,
                 save_interval: int) -> None:
-        if self.load_checkpoint:
-            iteration, epoch_start = self.__load_checkpoint(len(train_loader), train_loader.batch_size)
-        else:
-            iteration = 0
-            epoch_start = 0
+        iteration, epoch_start = self.__load_checkpoint(len(train_loader), train_loader.batch_size)
 
         for model in self.model.values():
             model.train()
@@ -166,7 +161,7 @@ class Trainer:
             running_loss.append(loss.item())
             del loss
             if self.device.type == 'cuda':
-                memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(0)))
+                memory_usage.append(convert_bytes_to_megabytes(torch.cuda.memory_reserved(self.cuda_index)))
             self.current_iteration += train_loader.batch_size
 
             if (self.current_iteration // train_loader.batch_size) % save_interval == 0:
@@ -346,7 +341,7 @@ class Trainer:
 
 def add_base_train_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
-    parser.add_argument('--load-checkpoint', action='store_true', help='Resume training from checkpoint')
+    parser.add_argument('--gpu-index', type=int, default=0, help='CUDA GPU index (only if multiple GPUs are available)')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--vocab-path', type=Path, default='../data/saved/vocabs', help='Path to vocab files')
     parser.add_argument('--data-path', type=Path, default='../data/saved/datasets', help='Path to dataset files')

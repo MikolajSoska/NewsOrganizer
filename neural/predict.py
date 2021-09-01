@@ -18,13 +18,14 @@ from utils.general import tokenize_text_content
 
 
 class NewsPredictor:
-    def __init__(self, use_cuda: bool, path_to_models: Union[Path, str] = '../data/saved/models', seed: int = 0):
+    def __init__(self, use_cuda: bool, cuda_index: int = 0, path_to_models: Union[Path, str] = '../data/saved/models',
+                 seed: int = 0):
         utils.set_random_seed(seed)
         connector = DatabaseConnector()
         if isinstance(path_to_models, str):
             path_to_models = Path(path_to_models)
 
-        self.__device = utils.get_device(use_cuda)
+        self.__device = utils.get_device(use_cuda, cuda_index)
         self.__tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
         self.__tags_dict = connector.get_tags_dict('conll2003')
 

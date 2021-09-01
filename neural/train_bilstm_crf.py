@@ -114,7 +114,7 @@ def main() -> None:
         log_save_path=args.logs_path,
         model_name=model_name,
         use_cuda=args.use_gpu,
-        load_checkpoint=args.load_checkpoint,
+        cuda_index=args.gpu_index,
         scores=[Precision(), Recall(), F1Score()]
     )
     trainer.set_models(
