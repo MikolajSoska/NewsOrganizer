@@ -24,7 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--experiment-name', type=str, default='bilstm_cnn', help='Name of the experiment')
     parser.add_argument('--dataset', choices=['conll2003', 'gmb'], default='conll2003', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=80, help='Training epochs')
-    parser.add_argument('--batch', type=int, default=9, help='Batch size')
+    parser.add_argument('--batch', type=int, default=9, help='Batch size during training')
+    parser.add_argument('--eval-batch', type=int, default=-1, help='Batch size in eval (equal to training batch if -1')
     parser.add_argument('--lr', type=float, default=0.0105, help='Learning rate')
     parser.add_argument('--cnn-width', type=int, default=3, help='Convolution width')
     parser.add_argument('--cnn-output', type=int, default=53, help='Convolution output size')
@@ -84,8 +85,10 @@ def create_model_from_args(args: argparse.Namespace, tags_count: int, vocab: Voc
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
-
     dump_args_to_file(args, args.model_path / args.experiment_name)
+    if args.eval_batch < 0:
+        args.eval_batch = args.batch
+
     vocab = VocabBuilder.build_vocab(args.dataset, 'ner', vocab_type='char', vocab_dir=args.vocab_path,
                                      digits_to_zero=True)
 
@@ -102,15 +105,15 @@ def main() -> None:
 
     dataset = partial(NERDataset, args.dataset, vocab=vocab, lowercase=True, digits_to_zero=True,
                       data_dir=args.data_path)
-    dataloader = partial(NERDataLoader, batch_size=args.batch, conv_kernel_size=args.cnn_width)
+    dataloader = partial(NERDataLoader, conv_kernel_size=args.cnn_width)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
 
-    train_loader = dataloader(train_dataset)
-    validation_loader = dataloader(validation_dataset)
-    test_loader = dataloader(test_dataset)
+    train_loader = dataloader(train_dataset, batch_size=args.batch)
+    validation_loader = dataloader(validation_dataset, batch_size=args.eval_batch)
+    test_loader = dataloader(test_dataset, batch_size=args.eval_batch)
     model = create_model_from_args(args, DatabaseConnector().get_tag_count(args.dataset) + 1, vocab, embeddings)
 
     trainer = Trainer(

@@ -20,7 +20,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--experiment-name', type=str, default='pointer_generator', help='Name of the experiment')
     parser.add_argument('--dataset', choices=['cnn_dailymail', 'xsum'], default='cnn_dailymail', help='Dataset name')
     parser.add_argument('--epochs', type=int, default=13, help='Training epochs')
-    parser.add_argument('--batch', type=int, default=8, help='Batch size')
+    parser.add_argument('--batch', type=int, default=8, help='Batch size during training')
+    parser.add_argument('--eval-batch', type=int, default=-1, help='Batch size in eval (equal to training batch if -1')
     parser.add_argument('--vocab-size', type=int, default=50000, help='Vocabulary size')
     parser.add_argument('--embedding-size', type=int, default=128, help='Size of word embeddings')
     parser.add_argument('--hidden-size', type=int, default=256, help='Size of hidden dim in LSTM layers')
@@ -89,21 +90,23 @@ def main() -> None:
     args = parse_args()
     utils.set_random_seed(args.seed)
     utils.dump_args_to_file(args, args.model_path / args.experiment_name)
+    if args.eval_batch < 0:
+        args.eval_batch = args.batch
 
     vocab = VocabBuilder.build_vocab(args.dataset, 'summarization', vocab_size=args.vocab_size,
                                      vocab_dir=args.vocab_path)
     dataset = partial(SummarizationDataset, args.dataset, max_article_length=args.max_article_length,
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
                       data_dir=args.data_path)
-    dataloader = partial(SummarizationDataLoader, batch_size=args.batch)
 
     train_dataset = dataset(split='train')
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
+
     # During training there is no need to max padding due to `teacher_forcing_ratio` = 1
-    train_loader = dataloader(train_dataset, pad_to_max=False)
-    validation_loader = dataloader(validation_dataset)
-    test_loader = dataloader(test_dataset)
+    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, pad_to_max=False)
+    validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.eval_batch)
+    test_loader = SummarizationDataLoader(test_dataset, batch_size=args.eval_batch)
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
