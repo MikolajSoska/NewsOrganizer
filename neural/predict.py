@@ -53,7 +53,7 @@ class NewsPredictor:
         args = utils.load_args_from_file(path_to_model / model_name)
         model = model_builder(args, **additional_args)
         weights_path = path_to_model / model_name / f'{model_name}.pt'
-        weights = torch.load(weights_path)
+        weights = torch.load(weights_path, map_location=self.__device)
 
         model.load_state_dict(weights[f'{model_name}_state_dict'])
         model.to(self.__device)

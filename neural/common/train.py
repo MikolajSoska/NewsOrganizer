@@ -245,7 +245,7 @@ class Trainer:
 
         checkpoints = self.__get_checkpoint_list()
         if len(checkpoints) > 0:
-            checkpoint = torch.load(self.model_save_path / Path(checkpoints[0]))
+            checkpoint = torch.load(self.model_save_path / Path(checkpoints[0]), map_location=self.device)
             for name, model in self.model.items():
                 model.load_state_dict(checkpoint[f'{name}_state_dict'])
             for name, optimizer in self.optimizer.items():
