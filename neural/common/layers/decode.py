@@ -278,4 +278,8 @@ class BeamSearchDecoder(nn.Module, ABC):
             return self.__decode_training(outputs, embedding, teacher_forcing_ratio, batch_size, device, cyclic_inputs,
                                           constant_inputs)
         else:
-            return self.__beam_search(embedding, batch_size, device, cyclic_inputs, constant_inputs)
+            if self.beam_size > 1:
+                return self.__beam_search(embedding, batch_size, device, cyclic_inputs, constant_inputs)
+            else:  # Beam size = 1 is the same as greedy decoding
+                return self.__decode_training(None, embedding, 0, batch_size, device,
+                                              cyclic_inputs, constant_inputs)
