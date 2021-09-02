@@ -80,11 +80,18 @@ class Trainer:
             gc.collect()
             self.train(train_loader, validation_loader, verbosity, save_interval)
 
-    def eval(self, test_loader: DataLoader) -> None:
+    def eval(self, test_loader: DataLoader, val_loader: DataLoader = None, full_validation: bool = False) -> None:
         self.__check_initialization()
-        self.__setup_log_file_handler('eval')
+        self.__setup_log_file_handler('full_eval' if full_validation else 'eval')
+
+        if full_validation:
+            assert val_loader is not None, 'During full evaluation phase validation loader has to be provided.'
+            self.current_phase = 'validation'
+            self.logger.info('Starting validation phase for each trained epoch...')
+            self.__full_validation(val_loader)
 
         self.logger.info('Starting test phase...')
+        self.__load_trained_model(f'{self.model_name}.pt')
         self.current_phase = 'test'
         self.__validate_model(test_loader)
 
@@ -201,6 +208,21 @@ class Trainer:
         self.logger.info('Result:')
         self.__log_progress(running_loss, [], running_score, time_start, self.current_epoch, data_length, data_length)
 
+    def __full_validation(self, validation_loader: DataLoader) -> None:
+        checkpoints = self.__get_epoch_checkpoints()
+        for i, checkpoint_name in enumerate(checkpoints):
+            self.__load_trained_model(checkpoint_name)
+            self.current_epoch = i
+            self.__validate_model(validation_loader)
+
+    def __load_trained_model(self, checkpoint_name: str) -> None:
+        checkpoint = torch.load(self.model_save_path / Path(checkpoint_name), map_location=self.device)
+        for name, model in self.model.items():
+            model.load_state_dict(checkpoint[f'{name}_state_dict'])
+        for name, optimizer in self.optimizer.items():
+            optimizer.load_state_dict(checkpoint[f'{name}-optimizer_state_dict'])
+        del checkpoint
+
     def __clip_gradients(self) -> None:
         if self.max_gradient_norm is not None:
             for model in self.model.values():
@@ -301,6 +323,17 @@ class Trainer:
 
         name_pattern = re.compile(rf'^{self.model_name}-e\d+i\d+\.pt$')
         return list(sorted(filter(name_pattern.match, os.listdir(self.model_save_path)), reverse=True,
+                           key=cmp_to_key(compare_checkpoints)))
+
+    def __get_epoch_checkpoints(self) -> List[str]:
+        def compare_checkpoints(checkpoint_1: str, checkpoint_2: str) -> int:
+            epoch_1 = re.findall(r'\d+', checkpoint_1)[0]
+            epoch_2 = re.findall(r'\d+', checkpoint_2)[0]
+
+            return int(epoch_1) - int(epoch_2)
+
+        name_pattern = re.compile(rf'^{self.model_name}-epoch-\d+\.pt$')
+        return list(sorted(filter(name_pattern.match, os.listdir(self.model_save_path)),
                            key=cmp_to_key(compare_checkpoints)))
 
     def __remove_old_checkpoints(self) -> None:
