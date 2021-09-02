@@ -1,4 +1,5 @@
 import argparse
+import math
 from functools import partial
 from typing import Tuple, Any
 
@@ -99,19 +100,22 @@ def main() -> None:
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=True,
                       data_dir=args.data_path)
 
-    train_dataset = dataset(split='train')
+    train_dataset = dataset(split='train') if not args.eval_only else None
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
 
     # During training there is no need to max padding due to `teacher_forcing_ratio` = 1
-    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, pad_to_max=False)
+    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, pad_to_max=False) \
+        if not args.eval_only else None
     validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.eval_batch)
     test_loader = SummarizationDataLoader(test_dataset, batch_size=args.eval_batch)
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
     model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index, unk_index=vocab.unk_index)
-    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage_iter
+    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage_iter \
+        if not args.eval_only else math.inf
+
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 
@@ -139,8 +143,9 @@ def main() -> None:
     trainer.set_optimizer(
         adagrad=torch.optim.Adagrad(model.parameters(), lr=args.lr, initial_accumulator_value=args.init_acc_value)
     )
-    trainer.train(train_loader, validation_loader)
-    trainer.eval(test_loader)
+    if not args.eval_only:
+        trainer.train(train_loader, validation_loader)
+    trainer.eval(test_loader, validation_loader, full_validation=args.full_validation)
 
 
 if __name__ == '__main__':

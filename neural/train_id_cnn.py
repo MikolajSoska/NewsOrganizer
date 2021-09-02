@@ -112,11 +112,11 @@ def main() -> None:
                       data_dir=args.data_path)
     dataloader = partial(NERDataLoader, conv_kernel_size=args.cnn_width)
 
-    train_dataset = dataset(split='train')
+    train_dataset = dataset(split='train') if not args.eval_only else None
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
 
-    train_loader = dataloader(train_dataset, batch_size=args.batch)
+    train_loader = dataloader(train_dataset, batch_size=args.batch) if not args.eval_only else None
     validation_loader = dataloader(validation_dataset, batch_size=args.eval_batch)
     test_loader = dataloader(test_dataset, batch_size=args.eval_batch)
     model = create_model_from_args(args, DatabaseConnector().get_tag_count(args.dataset) + 1, vocab, embeddings)
@@ -141,8 +141,9 @@ def main() -> None:
     trainer.set_optimizer(
         adam=torch.optim.Adam(model.parameters(), lr=args.lr, betas=tuple(args.adam_betas), eps=args.adam_eps)
     )
-    trainer.train(train_loader, validation_loader, verbosity=50, save_interval=50)
-    trainer.eval(test_loader)
+    if not args.eval_only:
+        trainer.train(train_loader, validation_loader)
+    trainer.eval(test_loader, validation_loader, full_validation=args.full_validation)
 
 
 if __name__ == '__main__':

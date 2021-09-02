@@ -151,10 +151,11 @@ def main() -> None:
     else:
         embeddings = None
 
-    train_dataset = dataset(split='train')
+    train_dataset = dataset(split='train') if not args.eval_only else None
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
-    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch)
+    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch) \
+        if not args.eval_only else None
     validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.eval_batch)
     test_loader = SummarizationDataLoader(test_dataset, batch_size=args.eval_batch)
 
@@ -195,8 +196,9 @@ def main() -> None:
     trainer.set_optimizer(
         adam=torch.optim.Adam(model.parameters(), lr=args.pretrain_lr)  # Start optimizer with pretrain LR
     )
-    trainer.train(train_loader, validation_loader)
-    trainer.eval(test_loader)
+    if not args.eval_only:
+        trainer.train(train_loader, validation_loader)
+    trainer.eval(test_loader, validation_loader, full_validation=args.full_validation)
 
 
 if __name__ == '__main__':

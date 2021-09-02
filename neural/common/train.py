@@ -376,6 +376,8 @@ def add_base_train_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPar
     parser.add_argument('--use-gpu', action='store_true', help='Train with CUDA')
     parser.add_argument('--gpu-index', type=int, default=0, help='CUDA GPU index (only if multiple GPUs are available)')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
+    parser.add_argument('--eval-only', action='store_true', help='Run only validation phase')
+    parser.add_argument('--full-validation', action='store_true', help='Runs evaluation for each epoch checkpoint')
     parser.add_argument('--vocab-path', type=Path, default='../data/saved/vocabs', help='Path to vocab files')
     parser.add_argument('--data-path', type=Path, default='../data/saved/datasets', help='Path to dataset files')
     parser.add_argument('--model-path', type=Path, default='../data/saved/models', help='Path to model files')

@@ -87,12 +87,13 @@ def main() -> None:
                       max_summary_length=args.max_summary_length, vocab=vocab, get_oov=False,
                       data_dir=args.data_path)
 
-    train_dataset = dataset(split='train')
+    train_dataset = dataset(split='train') if not args.eval_only else None
     validation_dataset = dataset(split='validation')
     test_dataset = dataset(split='test')
 
     # Predictions and targets always have the same size, so no need to extra padding
-    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, pad_to_max=False)
+    train_loader = SummarizationDataLoader(train_dataset, batch_size=args.batch, pad_to_max=False) \
+        if not args.eval_only else None
     validation_loader = SummarizationDataLoader(validation_dataset, batch_size=args.eval_batch, pad_to_max=True)
     test_loader = SummarizationDataLoader(test_dataset, batch_size=args.eval_batch, pad_to_max=True)
 
@@ -123,8 +124,9 @@ def main() -> None:
     trainer.set_optimizer(
         adam=TransformerAdam(model.parameters(), betas=tuple(args.adam_betas), eps=args.adam_eps,
                              model_dim=args.embedding_dim, warmup_steps=args.warmup_steps, batch_size=args.batch))
-    trainer.train(train_loader, validation_loader)
-    trainer.eval(test_loader)
+    if not args.eval_only:
+        trainer.train(train_loader, validation_loader)
+    trainer.eval(test_loader, validation_loader, full_validation=args.full_validation)
 
 
 if __name__ == '__main__':
