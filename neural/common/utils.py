@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Tuple, Callable, Any
+from typing import List, Callable, Any
 
 import torch
 from torch import Tensor
@@ -91,18 +91,13 @@ def clean_predicted_tokens(tokens: Tensor, eos_index: int) -> Tensor:
     return tokens
 
 
-def remove_unnecessary_padding(tokens: Tensor, targets: Tensor) -> Tuple[Tensor, Tensor]:
+def remove_unnecessary_padding(tokens: Tensor) -> Tensor:
     # Add batch dim if necessary
     if len(tokens.shape) == 1:
         tokens = tokens.unsqueeze(1)
-    if len(targets.shape) == 1:
-        targets = targets.unsqueeze(1)
 
-    predictions_mask = torch.clip(torch.sum(tokens, dim=1), max=1)
-    targets_mask = torch.clip(torch.sum(targets, dim=1), max=1)
-    padding_mask = torch.clip((predictions_mask + targets_mask), max=1)
+    padding_mask = torch.clip(torch.sum(tokens, dim=1), max=1)
     last_index = torch.sum(padding_mask)
     tokens = torch.squeeze(tokens[:last_index, :])
-    targets = torch.squeeze(targets[:last_index, :])
 
-    return tokens, targets
+    return tokens

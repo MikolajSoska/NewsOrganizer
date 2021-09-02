@@ -114,9 +114,8 @@ class ROUGE(Scorer):
         batch_size = labels.shape[1]
         labels = utils.clean_predicted_tokens(labels, self.eos_index)
         for i in range(batch_size):
-            hypothesis = labels[:, i]
-            reference = target[:, i]
-            hypothesis, reference = utils.remove_unnecessary_padding(hypothesis, reference)
+            hypothesis = utils.remove_unnecessary_padding(labels[:, i])
+            reference = utils.remove_unnecessary_padding(target[:, i])
 
             hypothesis = utils.tensor_to_string(self.vocab, hypothesis)
             reference = utils.tensor_to_string(self.vocab, reference)
@@ -140,9 +139,8 @@ class METEOR(Scorer):  # TODO add exact match METEOR
         meteor = 0
         labels = utils.clean_predicted_tokens(labels, self.eos_index)
         for i in range(batch_size):
-            hypothesis = labels[:, i]
-            reference = target[:, i]
-            hypothesis, reference = utils.remove_unnecessary_padding(hypothesis, reference)
+            hypothesis = utils.remove_unnecessary_padding(labels[:, i])
+            reference = utils.remove_unnecessary_padding(target[:, i])
 
             hypothesis = utils.tensor_to_string(self.vocab, hypothesis)
             reference = utils.tensor_to_string(self.vocab, reference)
