@@ -271,7 +271,10 @@ class Trainer:
             for name, model in self.model.items():
                 model.load_state_dict(checkpoint[f'{name}_state_dict'])
             for name, optimizer in self.optimizer.items():
+                current_rl = optimizer.param_groups[0]['lr']
                 optimizer.load_state_dict(checkpoint[f'{name}-optimizer_state_dict'])
+                optimizer.param_groups[0]['lr'] = current_rl  # Set learning rate from the current run
+
             epoch_start = checkpoint['epoch']
             previous_batch_size = checkpoint['batch_size']
             iteration = checkpoint['iteration'] * previous_batch_size // batch_size
