@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--teacher-forcing', type=float, default=0.75, help='Teacher forcing ratio')
     parser.add_argument('--gamma', type=float, default=0.9984, help='Scaling factor to mixed objective loss')
+    parser.add_argument('--max-gradient-norm', type=int, default=2, help='Max norm for gradient clipping')
     parser.add_argument('--train-ml', action='store_true', help='Train using maximum likelihood')
     parser.add_argument('--train-rl', action='store_true', help='Train using reinforcement learning')
     parser.add_argument('--intra-attention', action='store_true', help='Use decoder intra-attention in training')
@@ -169,7 +170,7 @@ def main() -> None:
     trainer = Trainer(
         train_step=train_step,
         epochs=args.epochs,
-        max_gradient_norm=None,
+        max_gradient_norm=args.max_gradient_norm if args.max_gradient_norm >= 0 else None,
         model_save_path=args.model_path,
         log_save_path=args.logs_path,
         model_name=args.experiment_name,
