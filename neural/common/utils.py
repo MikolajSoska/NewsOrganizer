@@ -47,12 +47,13 @@ def get_device(use_cuda: bool, cuda_index: int, log_method: Callable[[str], None
 
 def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
     tokens = []
-    for token_id in tensor:
-        try:  # Try-catch is much faster in this case than if-else
-            token = vocab.itos[token_id]
-        except IndexError:
-            token = vocab.UNK
-        tokens.append(token)
+    if len(tensor) > 0:
+        for token_id in tensor:
+            try:  # Try-catch is much faster in this case than if-else
+                token = vocab.itos[token_id]
+            except IndexError:
+                token = vocab.UNK
+            tokens.append(token)
 
     return ' '.join(tokens)
 
