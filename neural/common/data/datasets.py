@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Any, Iterator
 
 import datasets
-import tqdm
+import tqdm.auto as tqdm
 from sklearn.model_selection import train_test_split
 from torchtext.data.utils import get_tokenizer
 from torchtext.utils import download_from_url
