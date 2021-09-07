@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import Counter
-from typing import Any, Union
+from typing import List, Any, Union
 
 import sklearn.metrics as metrics
 import torch
@@ -65,38 +65,41 @@ class Accuracy(Scorer):
 
 
 class Precision(Scorer):
-    def __init__(self, average: str = 'macro'):
+    def __init__(self, labels: List[int] = None, average: str = 'micro'):
         super().__init__()
+        self.labels = labels
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = self._get_labels(predictions)
         precision = metrics.precision_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
-                                            average=self.average, zero_division=0)
+                                            average=self.average, zero_division=0, labels=self.labels)
         return ScoreValue(Precision=precision)
 
 
 class Recall(Scorer):
-    def __init__(self, average: str = 'macro'):
+    def __init__(self, labels: List[int] = None, average: str = 'micro'):
         super().__init__()
+        self.labels = labels
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = self._get_labels(predictions)
         precision = metrics.recall_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()),
-                                         average=self.average, zero_division=0)
+                                         average=self.average, zero_division=0, labels=self.labels)
         return ScoreValue(Recall=precision)
 
 
 class F1Score(Scorer):
-    def __init__(self, average: str = 'macro'):
+    def __init__(self, labels: List[int] = None, average: str = 'micro'):
         super().__init__()
+        self.labels = labels
         self.average = average
 
     def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
         labels = self._get_labels(predictions)
         f1_score = metrics.f1_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()), average=self.average,
-                                    zero_division=0)
+                                    zero_division=0, labels=self.labels)
         return ScoreValue(F1=f1_score)
 
 

@@ -120,6 +120,7 @@ def main() -> None:
     validation_loader = dataloader(validation_dataset, batch_size=args.eval_batch)
     test_loader = dataloader(test_dataset, batch_size=args.eval_batch)
     model = create_model_from_args(args, DatabaseConnector().get_tag_count(args.dataset) + 1, vocab, embeddings)
+    labels = list(DatabaseConnector().get_tags_dict(args.dataset).keys())
 
     trainer = Trainer(
         train_step=train_step,
@@ -130,7 +131,7 @@ def main() -> None:
         model_name=args.experiment_name,
         use_cuda=args.use_gpu,
         cuda_index=args.gpu_index,
-        scores=[Precision(), Recall(), F1Score()]
+        scores=[Precision(labels), Recall(labels), F1Score(labels)]
     )
     trainer.set_models(
         id_cnn=model
