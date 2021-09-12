@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import Counter
+from collections import defaultdict
 from typing import List, Any, Union
 
 import sklearn.metrics as metrics
@@ -31,7 +31,12 @@ class ScoreValue:
         if not isinstance(score, ScoreValue):
             return NotImplemented
 
-        return ScoreValue(**(Counter(self.__dict__) + Counter(score.__dict__)))
+        scores_keys = list(self.__dict__.keys()) + list(score.__dict__.keys())
+        first_scores = defaultdict(int, self.__dict__)
+        second_scores = defaultdict(int, score.__dict__)
+
+        scores_sum = {score: first_scores[score] + second_scores[score] for score in scores_keys}
+        return ScoreValue(**scores_sum)
 
     def __truediv__(self, number: Union[int, float]) -> ScoreValue:
         new_scores = {score: value / number for score, value in self.__dict__.items()}
