@@ -57,7 +57,11 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     tags = tags[tags >= 0]
 
     loss = trainer.criterion.cross_entropy(output, tags)
-    score = trainer.score(output, tags)
+
+    if any(tags) != 0:  # Compute score only if targets contains named entities
+        score = trainer.score(output, tags)
+    else:
+        score = ScoreValue()
     del output
 
     return loss, score

@@ -64,6 +64,9 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
 
     loss = loss / len(outputs)
     score = score / len(outputs)
+    if not any(tags) != 0:  # Compute score only if targets contains named entities
+        score = ScoreValue()
+
     del outputs
 
     return loss, score
