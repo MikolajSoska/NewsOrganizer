@@ -28,8 +28,8 @@ class SpecialTokens(enum.Enum):
 
 
 class VocabWithChars(Vocab):
-    def __init__(self, words_counter: Counter, chars_counter: Counter, max_size: int = None):
-        super().__init__(words_counter, max_size)
+    def __init__(self, words_counter: Counter, chars_counter: Counter, specials: List[str], max_size: int = None):
+        super().__init__(words_counter, max_size, specials=specials)
         self.chars = Vocab(chars_counter, specials=[SpecialTokens.PAD.value, SpecialTokens.UNK.value])
 
 
@@ -79,4 +79,4 @@ class VocabBuilder:
             for token in tokens:
                 chars_counter.update(list(token))
 
-        return VocabWithChars(words_counter, chars_counter, vocab_size)
+        return VocabWithChars(words_counter, chars_counter, specials=SpecialTokens.get_tokens(), max_size=vocab_size)
