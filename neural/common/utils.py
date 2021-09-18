@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Callable, Any
+from typing import List, Tuple, Callable, Any
 
 import torch
 from torch import Tensor
@@ -26,7 +26,7 @@ def convert_bytes_to_megabytes(bytes_number: int) -> float:
     return round(bytes_number / (1024 ** 2), 2)
 
 
-def get_device(use_cuda: bool, cuda_index: int, log_method: Callable[[str], None] = print) -> torch.device:
+def get_device(use_cuda: bool, cuda_index: int = 0, log_method: Callable[[str], None] = print) -> torch.device:
     if use_cuda:
         if torch.cuda.is_available():
             device = torch.device(f'cuda:{cuda_index}')
@@ -43,6 +43,16 @@ def get_device(use_cuda: bool, cuda_index: int, log_method: Callable[[str], None
 
     log_method(f'Using device: {device_name}')
     return device
+
+
+def convert_input_to_device(inputs: Tuple[Any, ...], device: torch.device) -> Tuple[Any, ...]:
+    inputs_in_device = []
+    for tensor_in in inputs:
+        if isinstance(tensor_in, Tensor):
+            tensor_in = tensor_in.to(device=device)
+        inputs_in_device.append(tensor_in)
+
+    return tuple(inputs_in_device)
 
 
 def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:

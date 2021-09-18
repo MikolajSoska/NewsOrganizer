@@ -20,7 +20,7 @@ from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
 from neural.common.scores import Scorer, ScoreValue
-from neural.common.utils import convert_bytes_to_megabytes, get_device
+from neural.common.utils import convert_bytes_to_megabytes, get_device, convert_input_to_device
 
 
 class Trainer:
@@ -156,7 +156,7 @@ class Trainer:
             for optimizer in self.optimizer.values():
                 optimizer.zero_grad(set_to_none=True)
 
-            inputs = self.__convert_input_to_device(inputs)
+            inputs = convert_input_to_device(inputs, self.device)
             loss, score = self.train_step(self, inputs)
             running_score += score
             loss.backward()
@@ -194,7 +194,7 @@ class Trainer:
             for model in self.model.values():
                 model.eval()
             for inputs in tqdm.tqdm(data_loader, file=sys.stdout):
-                inputs = self.__convert_input_to_device(inputs)
+                inputs = convert_input_to_device(inputs, self.device)
                 loss, score = self.train_step(self, inputs)
 
                 running_loss.append(loss.item())
@@ -346,15 +346,6 @@ class Trainer:
                 (self.model_save_path / Path(checkpoint)).unlink()
             except PermissionError as error:
                 self.logger.error(f'Can\'t remove old checkpoint {checkpoint}. Permission error: {error}.')
-
-    def __convert_input_to_device(self, inputs: Tuple[Any, ...]) -> Tuple[Any, ...]:
-        inputs_in_device = []
-        for tensor_in in inputs:
-            if isinstance(tensor_in, Tensor):
-                tensor_in = tensor_in.to(device=self.device)
-            inputs_in_device.append(tensor_in)
-
-        return tuple(inputs_in_device)
 
     def __log_progress(self, running_loss: List[float], memory_usage: List[float], running_score: ScoreValue,
                        time_start: float, epoch: int, iteration: int, iteration_max: int) -> None:
