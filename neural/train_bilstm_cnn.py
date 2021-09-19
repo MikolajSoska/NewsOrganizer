@@ -125,9 +125,9 @@ def main() -> None:
         train_step=train_step,
         epochs=args.epochs,
         max_gradient_norm=None,
-        model_save_path=args.model_path,
-        log_save_path=args.logs_path,
-        model_name=args.experiment_name,
+        model_save_path=args.model_path / args.experiment_name,
+        log_save_path=args.logs_path / args.experiment_name,
+        model_name='bilstm_cnn',
         use_cuda=args.use_gpu,
         cuda_index=args.gpu_index,
         scores=[Precision(labels), Recall(labels), F1Score(labels)]

@@ -35,8 +35,8 @@ class Trainer:
         self.epochs = epochs
         self.max_gradient_norm = max_gradient_norm
         self.model_name = model_name
-        self.model_save_path = self.__get_save_dir(model_save_path)
-        self.log_save_path = self.__get_save_dir(log_save_path)
+        self.model_save_path = Path(model_save_path)
+        self.log_save_path = Path(log_save_path)
         self.logger = self.__setup_logger()
         self.device = get_device(use_cuda, cuda_index, log_method=self.logger.info)
         self.cuda_index = cuda_index
@@ -49,6 +49,9 @@ class Trainer:
         self.current_epoch = 0
         self.current_iteration = 0
         self.current_phase = 'train'
+
+        self.model_save_path.mkdir(parents=True, exist_ok=True)
+        self.log_save_path.mkdir(parents=True, exist_ok=True)
 
     def set_models(self, **model: nn.Module) -> None:
         self.model = DotMap(model)
@@ -227,11 +230,6 @@ class Trainer:
         if self.max_gradient_norm is not None:
             for model in self.model.values():
                 nn.utils.clip_grad_norm_(model.parameters(), self.max_gradient_norm)
-
-    def __get_save_dir(self, save_path: Path) -> Path:
-        path = save_path / self.model_name
-        path.mkdir(parents=True, exist_ok=True)
-        return path
 
     @staticmethod
     def __setup_logger() -> logging.Logger:
