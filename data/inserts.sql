@@ -10,9 +10,30 @@ VALUES (0, 'CNN', 'cnn', 1),
        (0, 'Newsweek', 'newsweek', 1),
        (0, 'National Geographic', 'national-geographic', 1);
 
+INSERT INTO tasks
+VALUES (0, 'Named Entity Recognition'),
+       (0, 'Abstractive Summarization');
+
 INSERT INTO datasets
-VALUES (0, 'conll2003'),
-       (0, 'gmb');
+VALUES (0, 'conll2003', 'CoNLL-2003', 1),
+       (0, 'gmb', 'GMB', 1),
+       (0, 'cnn_dailymail', 'CNN/Daily Mail', 1),
+       (0, 'xsum', 'XSum', 1);
+
+INSERT INTO models
+VALUES (0, 'BiLSTM-CNN', 'bilstm_cnn', 1, 1),
+       (0, 'BiLSTM-CNN', 'bilstm_cnn-gmb-new', 2, 1),
+       (0, 'BiLSTM-CRF', 'bilstm_crf', 1, 1),
+       (0, 'BiLSTM-CRF', 'bilstm_crf-gmb9', 2, 1),
+       (0, 'ID-CNN', 'id_cnn', 1, 1),
+       (0, 'ID-CNN', 'id_cnn-gmb-final', 2, 1),
+       (0, 'Pointer-generator', 'pointer_generator', 3, 2),
+       (0, 'Pointer-generator', 'pointer_generator-xsum', 4, 2),
+       (0, 'RL+ML', 'reinforcement_learning', 3, 2),
+       (0, 'RL+ML', 'reinforcement_learning-xsum-mixed', 4, 2),
+       (0, 'Transformer', 'transformer', 3, 2),
+       (0, 'Transformer', 'transformer-xsum', 4, 2);
+
 
 # CoNLL2003 dataset
 INSERT INTO tag_categories
