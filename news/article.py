@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Tuple, Optional
+from typing import List, Dict
 
 
 @dataclass(init=True, repr=True, eq=False)
@@ -18,6 +18,14 @@ class NewsSite:
 
 
 @dataclass(init=True, repr=True, eq=False)
+class NamedEntity:
+    name: str
+    position: int
+    length: int
+    words: str
+
+
+@dataclass(init=True, repr=True, eq=False)
 class NewsArticle:
     title: str
     content: str  # TODO: change back to list with mechanism to restore division into paragraphs
@@ -25,5 +33,5 @@ class NewsArticle:
     article_date: datetime
     news_site: NewsSite
     image_url: str
-    summary: Optional[str] = None
-    named_entities: List[Tuple[str, int, int, str]] = field(default_factory=list)
+    summaries: Dict[int, str] = field(default_factory=dict)
+    named_entities: Dict[int, List[NamedEntity]] = field(default_factory=dict)
