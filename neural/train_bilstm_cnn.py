@@ -121,7 +121,7 @@ def main() -> None:
         cross_entropy=nn.CrossEntropyLoss()
     )
     trainer.set_optimizer(
-        sgd=torch.optim.SGD(model.parameters(), lr=args.lr)
+        sgd=torch.optim.Adam(model.parameters(), lr=args.lr)
     )
     if not args.eval_only:
         trainer.train(train_loader, validation_loader, verbosity=500, save_interval=500)

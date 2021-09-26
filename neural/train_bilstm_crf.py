@@ -118,7 +118,7 @@ def main() -> None:
         loss=nn.Identity()  # Loss is calculated via CRF layer in model
     )
     trainer.set_optimizer(
-        sgd=torch.optim.SGD(model.parameters(), lr=args.lr)
+        adam=torch.optim.Adam(model.parameters(), lr=args.lr)
     )
     if not args.eval_only:
         trainer.train(train_loader, validation_loader)
