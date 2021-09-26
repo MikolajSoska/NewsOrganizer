@@ -9,7 +9,7 @@ from torch import Tensor
 from torchtext.vocab import GloVe
 
 from neural.common.data.embeddings import CollobertEmbeddings
-from neural.common.data.vocab import VocabBuilder, VocabWithChars
+from neural.common.data.vocab import VocabBuilder
 from neural.common.scores import Precision, Recall, F1Score
 from neural.common.scores import ScoreValue
 from neural.common.train import Trainer, add_base_train_args
@@ -72,23 +72,6 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score
 
 
-def create_model_from_args(args: argparse.Namespace, tags_count: int, vocab: VocabWithChars,
-                           embeddings: Tensor = None) -> IteratedDilatedCNN:
-    return IteratedDilatedCNN(
-        output_size=tags_count,
-        conv_width=args.cnn_width,
-        conv_filters=args.cnn_filters,
-        dilation_sizes=args.dilation,
-        block_repeats=args.block_repeat,
-        input_dropout=args.input_dropout,
-        block_dropout=args.block_dropout,
-        vocab_size=len(vocab),
-        embedding_dim=args.word_embedding_size,
-        embeddings=embeddings,
-        use_word_features=args.word_features,
-    )
-
-
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
@@ -122,7 +105,8 @@ def main() -> None:
     train_loader = dataloader(train_dataset, batch_size=args.batch) if not args.eval_only else None
     validation_loader = dataloader(validation_dataset, batch_size=args.eval_batch)
     test_loader = dataloader(test_dataset, batch_size=args.eval_batch)
-    model = create_model_from_args(args, DatabaseConnector().get_tag_count(args.dataset) + 1, vocab, embeddings)
+    tags_count = DatabaseConnector().get_tag_count(args.dataset) + 1
+    model = IteratedDilatedCNN.create_from_args(vars(args), tags_count, len(vocab), embeddings)
     labels = list(DatabaseConnector().get_tags_dict(args.dataset).keys())
 
     trainer = Trainer(

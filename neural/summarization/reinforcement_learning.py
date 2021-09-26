@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from itertools import zip_longest
-from typing import Tuple, Optional, Any, List
+from typing import Tuple, Dict, Optional, Any, List
 
 import torch
 import torch.nn as nn
@@ -7,7 +9,9 @@ from torch import Tensor
 from torch.distributions import Categorical
 
 import neural.common.layers as layers
+from neural.common.data.vocab import SpecialTokens
 from neural.common.layers.decode import BeamSearchDecoder
+from neural.common.model import BaseModel
 
 
 class Encoder(nn.Module):
@@ -190,7 +194,7 @@ class Decoder(BeamSearchDecoder):
         return decoder_inputs.detach()  # This can be done during training so detach in necessary
 
 
-class ReinforcementSummarization(nn.Module):
+class ReinforcementSummarization(BaseModel):
     def __init__(self, vocab_size: int, hidden_size: int, max_summary_length: int, bos_index: int, eos_index: int,
                  unk_index: int, beam_size: int, embedding_dim: int = None, embeddings: Tensor = None,
                  use_intra_attention: bool = True):
@@ -208,6 +212,33 @@ class ReinforcementSummarization(nn.Module):
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(vocab_size, embedding_dim, hidden_size, bos_index, eos_index, unk_index,
                                max_summary_length, use_intra_attention, beam_size)
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], bos_index: int = None, eos_index: int = None, unk_index: int = None,
+                         embeddings: Tensor = None) -> ReinforcementSummarization:
+        assert bos_index is not None, 'BOS index can\'t be None'
+        assert eos_index is not None, 'EOS index can\'t be None'
+        assert unk_index is not None, 'UNK index can\'t be None'
+
+        return cls(
+            vocab_size=args['vocab_size'] + len(SpecialTokens),
+            hidden_size=args['hidden_size'],
+            max_summary_length=args['max_summary_length'],
+            bos_index=bos_index,
+            eos_index=eos_index,
+            unk_index=unk_index,
+            embedding_dim=args['embedding_size'],
+            embeddings=embeddings,
+            use_intra_attention=args['intra_attention'],
+            beam_size=args['beam_size']
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        texts, texts_lengths, texts_extended, oov_list = inputs
+        oov_size = len(max(oov_list, key=lambda x: len(x)))
+        _, tokens, _ = self(texts, texts_lengths, texts_extended, oov_size)
+
+        return tokens
 
     def forward(self, inputs: Tensor, inputs_length: Tensor, inputs_extended: Tensor, oov_size: int,
                 outputs: Tensor = None, teacher_forcing_ratio: float = 1.0,

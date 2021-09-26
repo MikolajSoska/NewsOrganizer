@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, Any
+from typing import Dict, Any
 
 import torch.nn as nn
 from torch import Tensor
@@ -10,9 +10,9 @@ from torch import Tensor
 class BaseModel(nn.Module, ABC):
     @classmethod
     @abstractmethod
-    def create_from_args(cls, args: Dict[Any], **additional_parameters: Any) -> BaseModel:
+    def create_from_args(cls, args: Dict[str, Any], **kwargs: Any) -> BaseModel:
         pass
 
     @abstractmethod
-    def prediction_step(self, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Any, ...]:
+    def predict(self, *inputs: Any) -> Tensor:
         pass

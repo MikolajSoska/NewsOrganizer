@@ -57,24 +57,6 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score
 
 
-def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int) -> Transformer:
-    return Transformer(
-        encoder_layers=args.encoder_layers,
-        decoder_layers=args.decoder_layers,
-        vocab_size=args.vocab_size + len(SpecialTokens),
-        embedding_dim=args.embedding_dim,
-        key_and_query_dim=args.key_and_query_dim,
-        value_dim=args.value_dim,
-        heads_number=args.heads_number,
-        feed_forward_size=args.ffn_size,
-        dropout_rate=args.dropout,
-        max_summary_length=args.max_summary_length,
-        bos_index=bos_index,
-        eos_index=eos_index,
-        beam_size=args.beam_size
-    )
-
-
 def main() -> None:
     args = parse_args()
     set_random_seed(args.seed)
@@ -100,7 +82,7 @@ def main() -> None:
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
-    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index)
+    model = Transformer.create_from_args(vars(args), bos_index, eos_index)
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 

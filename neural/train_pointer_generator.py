@@ -74,20 +74,6 @@ def train_step(trainer: Trainer, inputs: Tuple[Any, ...]) -> Tuple[Tensor, Score
     return loss, score / batch_size
 
 
-def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int,
-                           unk_index: int) -> PointerGeneratorNetwork:
-    return PointerGeneratorNetwork(
-        vocab_size=args.vocab_size + len(SpecialTokens),
-        bos_index=bos_index,
-        eos_index=eos_index,
-        unk_index=unk_index,
-        embedding_dim=args.embedding_size,
-        hidden_size=args.hidden_size,
-        max_summary_length=args.max_summary_length,
-        beam_size=args.beam_size
-    )
-
-
 def main() -> None:
     args = parse_args()
     utils.set_random_seed(args.seed)
@@ -113,8 +99,8 @@ def main() -> None:
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
-    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index, unk_index=vocab.unk_index)
-    iterations_without_coverage = len(train_dataset) * args.epochs - args.coverage_iter \
+    model = PointerGeneratorNetwork.create_from_args(vars(args), bos_index, eos_index, vocab.unk_index)
+    iterations_without_coverage = len(train_dataset) * (args.epochs - 1) \
         if not args.eval_only else math.inf
 
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')

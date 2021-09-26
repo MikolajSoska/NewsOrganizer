@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import math
-from typing import List, Tuple, Optional, Any
+from typing import List, Tuple, Optional, Any, Dict
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.data.vocab import SpecialTokens
 from neural.common.layers.decode import BeamSearchDecoder, BeamSearchNode
+from neural.common.model import BaseModel
 
 
 class PositionalEncoding(nn.Module):
@@ -218,7 +222,8 @@ class Decoder(BeamSearchDecoder):
         return predictions, tokens, []
 
 
-class Transformer(nn.Module):
+
+class Transformer(BaseModel):
     def __init__(self, encoder_layers: int, decoder_layers: int, vocab_size: int, embedding_dim: int,
                  key_and_query_dim: int, value_dim: int, heads_number: int, feed_forward_size: int,
                  dropout_rate: float, max_summary_length: int, bos_index: int, eos_index: int, beam_size: int):
@@ -236,6 +241,33 @@ class Transformer(nn.Module):
         self.decoder = Decoder(vocab_size, decoder_layers, embedding_dim, key_and_query_dim, value_dim, heads_number,
                                feed_forward_size, dropout_rate, bos_index, eos_index, max_summary_length,
                                self.embedding[0].weight, beam_size)
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], bos_index: int = None, eos_index: int = None) -> Transformer:
+        assert bos_index is not None, 'BOS index can\'t be None'
+        assert eos_index is not None, 'EOS index can\'t be None'
+
+        return cls(
+            encoder_layers=args['encoder_layers'],
+            decoder_layers=args['decoder_layers'],
+            vocab_size=args['vocab_size'] + len(SpecialTokens),
+            embedding_dim=args['embedding_dim'],
+            key_and_query_dim=args['key_and_query_dim'],
+            value_dim=args['value_dim'],
+            heads_number=args['heads_number'],
+            feed_forward_size=args['ffn_size'],
+            dropout_rate=args['dropout'],
+            max_summary_length=args['max_summary_length'],
+            bos_index=bos_index,
+            eos_index=eos_index,
+            beam_size=args['beam_size']
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        texts, _, _, _ = inputs
+        _, tokens = self(texts)
+
+        return tokens
 
     @staticmethod
     def get_padding_mask(sequence, padding_index):

@@ -1,13 +1,16 @@
-from typing import List
+from __future__ import annotations
+
+from typing import List, Dict, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.model import BaseModel
 
 
-class IteratedDilatedCNN(nn.Module):
+class IteratedDilatedCNN(BaseModel):
     def __init__(self, output_size: int, conv_width: int, conv_filters: int, dilation_sizes: List[int],
                  block_repeats: int, input_dropout: float, block_dropout: float, vocab_size: int = None,
                  embedding_dim: int = None, embeddings: Tensor = None, use_word_features: bool = False):
@@ -48,6 +51,33 @@ class IteratedDilatedCNN(nn.Module):
             layers.Permute(2, 0, 1),
             nn.Linear(conv_filters, output_size)
         )
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], tags_count: int = None, vocab_size: int = None,
+                         embeddings: Tensor = None) -> IteratedDilatedCNN:
+        assert tags_count is not None, 'Tags count can\'t be None'
+        assert vocab_size is not None, 'Vocab size can\'t be None'
+
+        return cls(
+            output_size=tags_count,
+            conv_width=args['cnn_width'],
+            conv_filters=args['cnn_filters'],
+            dilation_sizes=args['dilation'],
+            block_repeats=args['block_repeat'],
+            input_dropout=args['input_dropout'],
+            block_dropout=args['block_dropout'],
+            vocab_size=vocab_size,
+            embedding_dim=args['word_embedding_size'],
+            embeddings=embeddings,
+            use_word_features=args['word_features'],
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        words, _, word_features, _ = inputs
+        outputs = self(words, word_features)
+        tags = torch.argmax(outputs[-1], dim=-1)
+
+        return tags
 
     def forward(self, sentences_in: Tensor, word_features_in: Tensor) -> List[Tensor]:
         embeddings = self.embedding(sentences_in)

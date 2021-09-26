@@ -1,11 +1,15 @@
-from typing import Tuple, Optional, Any
+from __future__ import annotations
+
+from typing import Tuple, Dict, Optional, Any
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.data.vocab import SpecialTokens
 from neural.common.layers.decode import BeamSearchDecoder
+from neural.common.model import BaseModel
 
 
 class Encoder(nn.Module):
@@ -150,7 +154,7 @@ class Decoder(BeamSearchDecoder):
         return decoder_inputs
 
 
-class PointerGeneratorNetwork(nn.Module):
+class PointerGeneratorNetwork(BaseModel):
     def __init__(self, vocab_size: int, bos_index: int, eos_index: int, unk_index: int, embedding_dim: int,
                  hidden_size: int, max_summary_length: int, beam_size: int):
         super().__init__()
@@ -160,6 +164,31 @@ class PointerGeneratorNetwork(nn.Module):
         self.encoder = Encoder(embedding_dim, hidden_size)
         self.decoder = Decoder(embedding_dim, vocab_size, hidden_size, max_summary_length, bos_index, eos_index,
                                unk_index, beam_size)
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], bos_index: int = None, eos_index: int = None,
+                         unk_index: int = None) -> PointerGeneratorNetwork:
+        assert bos_index is not None, 'BOS index can\'t be None'
+        assert eos_index is not None, 'EOS index can\'t be None'
+        assert unk_index is not None, 'UNK index can\'t be None'
+
+        return cls(
+            vocab_size=args['vocab_size'] + len(SpecialTokens),
+            bos_index=bos_index,
+            eos_index=eos_index,
+            unk_index=unk_index,
+            embedding_dim=args['embedding_size'],
+            hidden_size=args['hidden_size'],
+            max_summary_length=args['max_summary_length'],
+            beam_size=args['beam_size']
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        texts, texts_lengths, texts_extended, oov_list = inputs
+        oov_size = len(max(oov_list, key=lambda x: len(x)))
+        _, tokens, _, _ = self(texts, texts_lengths, texts_extended, oov_size)
+
+        return tokens
 
     def activate_coverage(self):
         self.with_coverage = True

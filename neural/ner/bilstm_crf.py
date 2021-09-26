@@ -1,4 +1,6 @@
-from typing import Tuple, Optional
+from __future__ import annotations
+
+from typing import Tuple, Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -9,7 +11,7 @@ from neural.common.layers.decode import CRF
 from neural.common.model import BaseModel
 
 
-class BiLSTMCRF(nn.Module):
+class BiLSTMCRF(BaseModel):
     def __init__(self, output_size: int, char_hidden_size: int, word_hidden_size: int, char_vocab_size: int,
                  char_embedding_dim: int, dropout_rate: float, word_vocab_size: int = None,
                  word_embedding_dim: int = None, embeddings: Tensor = None):
@@ -41,6 +43,32 @@ class BiLSTMCRF(nn.Module):
                                  bidirectional=True)
         self.out = nn.Linear(word_hidden_size, output_size)
         self.crf = CRF(output_size)
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], tags_count: int = None, word_vocab_size: int = None,
+                         char_vocab_size: int = None, embeddings: Tensor = None) -> BiLSTMCRF:
+        assert tags_count is not None, 'Tags count can\'t be None'
+        assert word_vocab_size is not None, 'Words vocab size can\'t be None'
+        assert char_vocab_size is not None, 'Chars vocab size can\'t be None'
+
+        return cls(
+            output_size=tags_count,
+            char_hidden_size=args['char_lstm_hidden'],
+            word_hidden_size=args['word_lstm_hidden'],
+            char_vocab_size=char_vocab_size,
+            char_embedding_dim=args['char_embedding_size'],
+            dropout_rate=args['dropout'],
+            word_vocab_size=word_vocab_size,
+            word_embedding_dim=args['word_embedding_size'],
+            embeddings=embeddings
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        words, chars, word_features, char_features = inputs
+        mask = (words > 0).float()
+
+        _, predictions = self(words, chars, mask)
+        return predictions
 
     @staticmethod
     def __init_hidden(hidden_dim: int, batch_size: int, device: str) -> Tuple[Tensor, Tensor]:

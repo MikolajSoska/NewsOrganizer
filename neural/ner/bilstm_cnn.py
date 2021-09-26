@@ -1,11 +1,16 @@
+from __future__ import annotations
+
+from typing import Any, Dict
+
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 import neural.common.layers as layers
+from neural.common.model import BaseModel
 
 
-class BiLSTMConv(nn.Module):
+class BiLSTMConv(BaseModel):
     def __init__(self, output_size: int, conv_width: int, conv_output_size: int, hidden_size: int, lstm_layers: int,
                  dropout_rate: float, char_vocab_size: int, char_embedding_dim: int, word_vocab_size: int = None,
                  word_embedding_dim: int = None, embeddings: Tensor = None, use_word_features: bool = False,
@@ -60,6 +65,36 @@ class BiLSTMConv(nn.Module):
             nn.Linear(2 * self.hidden_size, output_size),
             nn.LogSoftmax(dim=-1)
         )
+
+    @classmethod
+    def create_from_args(cls, args: Dict[str, Any], tags_count: int = None, word_vocab_size: int = None,
+                         char_vocab_size: int = None, embeddings: Tensor = None) -> BiLSTMConv:
+        assert tags_count is not None, 'Tags count can\'t be None'
+        assert word_vocab_size is not None, 'Words vocab size can\'t be None'
+        assert char_vocab_size is not None, 'Chars vocab size can\'t be None'
+
+        return cls(
+            output_size=tags_count,
+            conv_width=args['cnn_width'],
+            conv_output_size=args['cnn_output'],
+            hidden_size=args['lstm_state'],
+            lstm_layers=args['lstm_layers'],
+            dropout_rate=args['dropout'],
+            char_vocab_size=char_vocab_size,
+            char_embedding_dim=args['char_embedding_size'],
+            word_vocab_size=word_vocab_size,
+            word_embedding_dim=args['word_embedding_size'],
+            embeddings=embeddings,
+            use_word_features=args['word_features'],
+            use_char_features=args['char_features']
+        )
+
+    def predict(self, *inputs: Any) -> Tensor:
+        words, chars, word_features, char_features = inputs
+        output = self(words, chars, word_features, char_features)
+        tags = torch.argmax(output, dim=-1)
+
+        return tags
 
     def forward(self, sentences_in: Tensor, chars_in: Tensor, word_features_in: Tensor,
                 char_features_in: Tensor) -> Tensor:

@@ -112,22 +112,6 @@ def __update_training_phase(trainer: Trainer) -> None:
             params['lr'] = trainer.params.normal_lr
 
 
-def create_model_from_args(args: argparse.Namespace, bos_index: int, eos_index: int, unk_index: int,
-                           embeddings: Tensor = None) -> ReinforcementSummarization:
-    return ReinforcementSummarization(
-        vocab_size=args.vocab_size + len(SpecialTokens),
-        hidden_size=args.hidden_size,
-        max_summary_length=args.max_summary_length,
-        bos_index=bos_index,
-        eos_index=eos_index,
-        unk_index=unk_index,
-        embedding_dim=args.embedding_size,
-        embeddings=embeddings,
-        use_intra_attention=args.intra_attention,
-        beam_size=args.beam_size
-    )
-
-
 def main() -> None:
     args = parse_args()
     assert args.train_ml or args.train_rl, 'At least one training method need to be specified'
@@ -163,8 +147,7 @@ def main() -> None:
 
     bos_index = vocab.stoi[SpecialTokens.BOS.value]
     eos_index = vocab.stoi[SpecialTokens.EOS.value]
-    model = create_model_from_args(args, bos_index=bos_index, eos_index=eos_index, unk_index=vocab.unk_index,
-                                   embeddings=embeddings)
+    model = ReinforcementSummarization.create_from_args(vars(args), bos_index, eos_index, vocab.unk_index, embeddings)
     rouge = scores.ROUGE(vocab, 'rouge1', 'rouge2', 'rougeL')
     meteor = scores.METEOR(vocab)
 

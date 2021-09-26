@@ -19,6 +19,7 @@ from torch import Tensor
 from torch.optim import Optimizer
 from torch.utils.data.dataloader import DataLoader
 
+from neural.common.model import BaseModel
 from neural.common.scores import Scorer, ScoreValue
 from neural.common.utils import convert_bytes_to_megabytes, get_device, convert_input_to_device
 
@@ -28,7 +29,7 @@ class Trainer:
                  max_gradient_norm: Optional[int], model_save_path: Path, log_save_path: Path, model_name: str,
                  use_cuda: bool, cuda_index: int, max_model_backup: int = 3, scores: List[Scorer] = None,
                  validation_scores: List[Scorer] = None, test_scores: List[Scorer] = None, **params: Any):
-        self.model: Optional[DotMap[str, nn.Module]] = None
+        self.model: Optional[DotMap[str, BaseModel]] = None
         self.criterion: Optional[DotMap[str, nn.Module]] = None
         self.optimizer: Optional[DotMap[str, Optimizer]] = None
         self.train_step = train_step
@@ -53,7 +54,7 @@ class Trainer:
         self.model_save_path.mkdir(parents=True, exist_ok=True)
         self.log_save_path.mkdir(parents=True, exist_ok=True)
 
-    def set_models(self, **model: nn.Module) -> None:
+    def set_models(self, **model: BaseModel) -> None:
         self.model = DotMap(model)
         for name, model in self.model.items():
             self.model.name = model.to(self.device)
