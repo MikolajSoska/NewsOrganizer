@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -6,6 +6,7 @@ from torch import Tensor
 
 import neural.common.layers as layers
 from neural.common.layers.decode import CRF
+from neural.common.model import BaseModel
 
 
 class BiLSTMCRF(nn.Module):
@@ -46,7 +47,11 @@ class BiLSTMCRF(nn.Module):
         hidden_shape = (2, batch_size, hidden_dim)
         return torch.randn(hidden_shape, device=device), torch.randn(hidden_shape, device=device)
 
-    def forward(self, sentences_in: Tensor, chars_in: Tensor, tags: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, sentences_in: Tensor, chars_in: Tensor, mask: Tensor,
+                tags: Tensor = None) -> Tuple[Optional[Tensor], Tensor]:
+        if self.training and tags is None:
+            raise ValueError('Target tags must be provided during training.')
+
         sequence_length, batch_size = sentences_in.shape
         device = sentences_in.device
 
@@ -63,7 +68,10 @@ class BiLSTMCRF(nn.Module):
         word_features, _ = self.word_lstm(word_features, word_hidden)
         predictions = self.out(word_features)
 
-        score = self.crf(predictions, tags, mask)
+        if self.training:
+            score = self.crf(predictions, tags, mask)
+        else:
+            score = None
         predictions = self.crf.decode(predictions, mask)
 
         return score, predictions
