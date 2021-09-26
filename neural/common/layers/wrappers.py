@@ -5,20 +5,6 @@ from torch import Tensor
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
-class TimeDistributed(nn.Module):
-    def __init__(self, module):
-        super(TimeDistributed, self).__init__()
-        self.module = module
-
-    def forward(self, x):
-        x_reshape = x.contiguous().view(-1, x.size(-1))
-
-        y = self.module(x_reshape)
-        y = y.view(-1, x.size(1), y.size(-1))
-
-        return y
-
-
 class PackedRNN(nn.Module):
     def __init__(self, rnn_module: nn.RNNBase):
         super().__init__()

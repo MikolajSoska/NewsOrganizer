@@ -62,13 +62,6 @@ class Scorer(ABC):
             return torch.argmax(predictions, dim=-1)
 
 
-class Accuracy(Scorer):
-    def score(self, predictions: Tensor, target: Tensor) -> ScoreValue:
-        labels = self._get_labels(predictions)
-        accuracy = metrics.accuracy_score(torch.flatten(target.cpu()), torch.flatten(labels.cpu()))
-        return ScoreValue(Accuracy=accuracy)
-
-
 class Precision(Scorer):
     def __init__(self, labels: List[int] = None, average: str = 'micro'):
         super().__init__()
