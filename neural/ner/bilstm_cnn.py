@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -23,6 +21,7 @@ class BiLSTMConv(nn.Module):
         self.char_embedding = nn.Sequential(
             nn.Flatten(start_dim=0, end_dim=1),
             nn.Embedding(char_vocab_size, char_embedding_dim, padding_idx=0),
+            nn.Dropout(p=dropout_rate)
         )
 
         if use_char_features:
@@ -37,11 +36,13 @@ class BiLSTMConv(nn.Module):
         self.char_nn = nn.Sequential(
             layers.Permute(0, 2, 1),
             nn.Conv1d(char_embedding_dim, conv_output_size, kernel_size=conv_width),
-            layers.Max(dimension=-1)
+            nn.Tanh(),
+            layers.Max(dimension=-1),
+            nn.Dropout(p=dropout_rate)
         )
 
         if embeddings is not None:
-            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=False, padding_idx=0)
+            self.embedding = nn.Embedding.from_pretrained(embeddings, freeze=True, padding_idx=0)
         else:
             self.embedding = nn.Embedding(word_vocab_size, word_embedding_dim, padding_idx=0)
 
@@ -54,21 +55,11 @@ class BiLSTMConv(nn.Module):
         self.lstm = nn.LSTM(input_size=self.embedding.embedding_dim + conv_output_size, hidden_size=hidden_size,
                             num_layers=lstm_layers, bidirectional=True, dropout=dropout_rate if lstm_layers > 1 else 0)
 
-        self.forward_out = layers.TimeDistributed(nn.Sequential(
+        self.out = nn.Sequential(
             nn.Dropout(p=dropout_rate),
-            nn.Linear(self.hidden_size, output_size),
-            nn.LogSoftmax(dim=1)
-        ))
-
-        self.backward_out = layers.TimeDistributed(nn.Sequential(
-            nn.Dropout(p=dropout_rate),
-            nn.Linear(self.hidden_size, output_size),
-            nn.LogSoftmax(dim=1)
-        ))
-
-    def __init_hidden(self, batch_size: int, device: str) -> Tuple[Tensor, Tensor]:
-        hidden_shape = (2 * self.lstm_layers, batch_size, self.hidden_size)
-        return torch.zeros(hidden_shape, device=device), torch.zeros(hidden_shape, device=device)
+            nn.Linear(2 * self.hidden_size, output_size),
+            nn.LogSoftmax(dim=-1)
+        )
 
     def forward(self, sentences_in: Tensor, chars_in: Tensor, word_features_in: Tensor,
                 char_features_in: Tensor) -> Tensor:
@@ -89,12 +80,6 @@ class BiLSTMConv(nn.Module):
         else:
             sentences = torch.cat((sentences, char_features), dim=-1)
 
-        hidden, cell = self.__init_hidden(batch_size, sentences_in.device)
-        sentences, _ = self.lstm(sentences, (hidden, cell))
-        forward = sentences[:, :, :self.hidden_size]
-        backward = sentences[:, :, self.hidden_size:]
+        sentences, _ = self.lstm(sentences)
 
-        forward = self.forward_out(forward)
-        backward = self.backward_out(backward)
-
-        return forward + backward
+        return self.out(sentences)
