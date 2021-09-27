@@ -1,10 +1,11 @@
+import pickle
 from collections import Counter
 from collections import defaultdict
 from typing import List, Tuple, Dict
 
 import mysql.connector as mysql
 
-from news.article import NewsSite, Country, NewsArticle, NamedEntity
+from news.article import NewsSite, Country, NewsArticle, NamedEntity, NewsModel
 from utils.singleton import Singleton
 
 
@@ -31,6 +32,35 @@ class DatabaseConnector(metaclass=Singleton):
 
         return [NewsSite(name, code, country) for name, code in self.__cursor.fetchall()]
 
+    def get_datasets_identifiers(self, task_name: str) -> List[str]:
+        query = 'SELECT id_name from datasets d INNER JOIN tasks t on d.task_id = t.id WHERE t.name = %s'
+        self.__cursor.execute(query, (task_name,))
+
+        return [dataset[0] for dataset in self.__cursor.fetchall()]
+
+    def get_models(self, dataset_identifier: str) -> List[NewsModel]:
+        query = 'SELECT nm.id, model_name, model_identifier, class_name, constructor_args,dataset_args, batch_size ' \
+                'FROM news_models nm INNER JOIN models m ON nm.model_id = m.id INNER JOIN datasets d on ' \
+                'nm.dataset_id = d.id WHERE d.id_name = %s'
+        self.__cursor.execute(query, (dataset_identifier,))
+
+        models = []
+        data = self.__cursor.fetchall()
+        for model_id, model_name, name_identifier, class_name, constructor_args, dataset_args, batch_size in data:
+            model = NewsModel(
+                model_id=model_id,
+                fullname=model_name,
+                class_name=class_name,
+                name_identifier=name_identifier,
+                constructor_args=pickle.loads(constructor_args),
+                dataset_args=pickle.loads(dataset_args),
+                batch_size=batch_size,
+                dataset_name=dataset_identifier
+            )
+            models.append(model)
+
+        return models
+
     def add_new_article(self, article: NewsArticle) -> int:
         query = 'SELECT id FROM news_sites WHERE code = %s'
         self.__cursor.execute(query, (article.news_site.code,))
@@ -48,20 +78,44 @@ class DatabaseConnector(metaclass=Singleton):
             self.__cursor.execute(query, (summary, article_id, model_id))
         self.__database.commit()
 
-    def add_article_names_entities(self, article_id: int, named_entities: Dict[int, List[NamedEntity]],
-                                   dataset_name: str) -> None:
-        tag_category_dict = self.__get_tag_category_dict(dataset_name)
+    def add_article_names_entities(self, article_id: int, named_entities: Dict[int, List[NamedEntity]]) -> None:
         query = 'INSERT INTO article_tag_map VALUES (0, %s, %s, %s, %s, %s, %s)'
         for model_id, entities in named_entities.items():
+            dataset_name = self.__get_model_dataset_name(model_id)
+            tag_category_dict = self.__get_tag_category_dict(dataset_name)
             for entity in entities:
                 self.__cursor.execute(query, (tag_category_dict[entity.name], model_id, article_id, entity.position,
                                               entity.length, entity.words))
         self.__database.commit()
 
-    def get_tag_count(self, model_id: int) -> int:
-        query = 'SELECT COUNT(*) FROM tags t INNER JOIN tag_categories tc ON t.category_id = tc.id ' \
-                'INNER JOIN article_tag_map atm on tc.id = atm.tag_category_id and atm.model_id = %s'
-        self.__cursor.execute(query, (model_id,))
+    def add_new_model(self, model: NewsModel) -> None:
+        query = 'INSERT INTO news_models VALUES (0, %s, %s, %s, %s, %s)'
+        params = (
+            self.__get_model_id_or_add_new(model),
+            self.__get_dataset_id(model.dataset_name),
+            pickle.dumps(model.constructor_args),
+            pickle.dumps(model.dataset_args),
+            model.batch_size
+        )
+        self.__cursor.execute(query, params)
+        self.__database.commit()
+
+    def __get_model_id_or_add_new(self, model: NewsModel) -> int:
+        query = 'SELECT id from models WHERE model_name = %s AND model_identifier = %s AND class_name = %s'
+        self.__cursor.execute(query, (model.fullname, model.name_identifier, model.class_name))
+        result = self.__cursor.fetchone()
+        if result is None:
+            query = 'INSERT INTO models VALUES (0, %s, %s, %s)'
+            self.__cursor.execute(query, (model.fullname, model.name_identifier, model.class_name))
+            self.__database.commit()
+            return self.__cursor.lastrowid
+        else:
+            return result[0]
+
+    def get_tag_count(self, dataset_name: str) -> int:
+        query = 'SELECT COUNT(*) FROM tags t INNER JOIN tag_categories tc ON t.category_id = tc.id INNER JOIN ' \
+                'datasets d on tc.dataset_id = d.id WHERE id_name = %s'
+        self.__cursor.execute(query, (dataset_name,))
 
         return self.__cursor.fetchone()[0]
 
@@ -72,12 +126,24 @@ class DatabaseConnector(metaclass=Singleton):
 
         return {tag_label: (tag, category_name) for tag_label, tag, category_name in self.__cursor.fetchall()}
 
+    def __get_model_dataset_name(self, model_id: int) -> str:
+        query = 'SELECT id_name FROM datasets INNER JOIN news_models nm on datasets.id = nm.dataset_id WHERE nm.id = %s'
+        self.__cursor.execute(query, (model_id,))
+
+        return self.__cursor.fetchone()[0]
+
     def __get_tag_category_dict(self, dataset_name: str) -> Dict[str, int]:
         query = 'SELECT category_name, tc.id FROM tag_categories tc INNER JOIN datasets d ON tc.dataset_id = d.id ' \
                 'WHERE d.id_name = %s'
         self.__cursor.execute(query, (dataset_name,))
 
         return dict(self.__cursor.fetchall())
+
+    def __get_dataset_id(self, dataset_name: str) -> int:
+        query = 'SELECT id FROM datasets WHERE id_name = %s'
+        self.__cursor.execute(query, (dataset_name,))
+
+        return self.__cursor.fetchone()[0]
 
     def get_articles(self) -> List[NewsArticle]:
         query = 'SELECT * FROM news_articles'
