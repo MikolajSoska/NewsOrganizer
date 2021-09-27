@@ -184,6 +184,7 @@ class PointerGeneratorNetwork(BaseModel):
         )
 
     def predict(self, *inputs: Any) -> Tensor:
+        self.activate_coverage()
         texts, texts_lengths, texts_extended, oov_list = inputs
         oov_size = len(max(oov_list, key=lambda x: len(x)))
         _, tokens, _, _ = self(texts, texts_lengths, texts_extended, oov_size)

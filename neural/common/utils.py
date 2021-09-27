@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Tuple, Callable, Any
+from typing import List, Tuple, Dict, Callable, Any
 
 import torch
 from torch import Tensor
@@ -89,11 +89,11 @@ def dump_args_to_file(args: argparse.Namespace, filepath: Path) -> None:
         json.dump(args_dict, file, indent=2, cls=JSONPathEncoder)
 
 
-def load_args_from_file(filepath: Path) -> argparse.Namespace:
+def load_args_from_file(filepath: Path) -> Dict[str, Any]:
     with open(filepath / 'args.json', 'r') as file:
         args = json.load(file)
 
-    return argparse.Namespace(**args)
+    return args
 
 
 def clean_predicted_tokens(tokens: Tensor, eos_index: int) -> Tensor:
