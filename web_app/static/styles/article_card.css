@@ -10,3 +10,48 @@
 .article-image {
     width: 100%;
 }
+
+.article-card-entity {
+    margin: 5px 1px !important;
+    color: white !important;
+}
+
+.tag-per {
+    background-color: rgba(110, 53, 162, 0.77) !important;
+}
+
+.tag-org {
+    background-color: rgba(43, 133, 67, 0.8) !important;
+}
+
+.tag-loc {
+    background-color: #e7c011 !important;
+}
+
+.tag-misc {
+    background-color: steelblue !important;
+}
+
+.tag-geo {
+    background-color: #e7c011 !important;
+}
+
+.tag-gpe {
+    background-color: #2daaee !important;
+}
+
+.tag-tim {
+    background-color: #451fa9 !important;
+}
+
+.tag-art {
+    background-color: darkslategrey !important;
+}
+
+.tag-eve {
+    background-color: hotpink !important;
+}
+
+.tag-nat {
+    background-color: #cc1111 !important;
+}

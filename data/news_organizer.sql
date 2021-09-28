@@ -43,8 +43,9 @@ CREATE TABLE `summaries`
 CREATE TABLE `tag_categories`
 (
     `id`            int PRIMARY KEY AUTO_INCREMENT,
-    `category_name` varchar(255) UNIQUE NOT NULL,
-    `dataset_id`    int                 NOT NULL
+    `category_name` varchar(255) NOT NULL,
+    `short_name`    varchar(255) NOT NULL,
+    `dataset_id`    int          NOT NULL
 );
 
 CREATE TABLE `tags`
@@ -145,18 +146,20 @@ CREATE UNIQUE INDEX `summaries_index_0` ON `summaries` (`article_id`, `model_id`
 
 CREATE UNIQUE INDEX `tag_categories_index_1` ON `tag_categories` (`category_name`, `dataset_id`);
 
-CREATE UNIQUE INDEX `tags_index_2` ON `tags` (`tag`, `category_id`);
+CREATE UNIQUE INDEX `tag_categories_index_2` ON `tag_categories` (`short_name`, `dataset_id`);
 
-CREATE UNIQUE INDEX `tags_index_3` ON `tags` (`tag_label`, `category_id`);
+CREATE UNIQUE INDEX `tags_index_3` ON `tags` (`tag`, `category_id`);
 
-CREATE UNIQUE INDEX `article_tag_map_index_4` ON `article_tag_map` (`article_id`, `model_id`, `position`);
+CREATE UNIQUE INDEX `tags_index_4` ON `tags` (`tag_label`, `category_id`);
 
-CREATE UNIQUE INDEX `datasets_index_5` ON `datasets` (`id_name`, `language_id`);
+CREATE UNIQUE INDEX `article_tag_map_index_5` ON `article_tag_map` (`article_id`, `model_id`, `position`);
 
-CREATE UNIQUE INDEX `datasets_index_6` ON `datasets` (`full_name`, `language_id`);
+CREATE UNIQUE INDEX `datasets_index_6` ON `datasets` (`id_name`, `language_id`);
 
-CREATE UNIQUE INDEX `datasets_index_7` ON `datasets` (`id_name`, `task_id`);
+CREATE UNIQUE INDEX `datasets_index_7` ON `datasets` (`full_name`, `language_id`);
 
-CREATE UNIQUE INDEX `models_index_8` ON `models` (`model_name`, `model_identifier`, `class_name`);
+CREATE UNIQUE INDEX `datasets_index_8` ON `datasets` (`id_name`, `task_id`);
 
-CREATE UNIQUE INDEX `news_models_index_9` ON `news_models` (`model_id`, `dataset_id`);
+CREATE UNIQUE INDEX `models_index_9` ON `models` (`model_name`, `model_identifier`, `class_name`);
+
+CREATE UNIQUE INDEX `news_models_index_10` ON `news_models` (`model_id`, `dataset_id`);

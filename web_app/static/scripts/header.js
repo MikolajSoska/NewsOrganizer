@@ -1,8 +1,3 @@
-function changeNerModel() {
-    const nerSelect = document.getElementById("ner-select");
-    console.log(nerSelect.value)
-}
-
 $(document).ready(function () {
     $("#summarization-select").on("change", function () {
         prepareForNewSummaries();
@@ -15,6 +10,25 @@ $(document).ready(function () {
                 const article = document.getElementById("article-" + articleID);
                 const summaryNode = article.getElementsByClassName("summary")[0];
                 summaryNode.innerHTML = String(summary);
+            }
+        })
+    });
+    $("#ner-select").on("change", function () {
+        prepareForNewNamedEntities()
+        const nerSelect = document.getElementById("ner-select");
+        const modelID = nerSelect.value.replace("ner-model-", "");
+        const baseURL = window.location.origin;
+
+        $.getJSON(baseURL + "/named-entities/" + modelID, function (namedEntities) {
+            for (const [articleID, named_entities] of Object.entries(namedEntities)) {
+                let tagHTML = "";
+                for (const [words, entity] of named_entities) {
+                    tagHTML += "<div class=\"article-card-entity tag-" + entity.toLowerCase() + " btn\">";
+                    tagHTML += words + " (" + entity + ")</div>";
+                }
+                const article = document.getElementById("article-" + articleID);
+                const nerNode = article.getElementsByClassName("named-entities")[0];
+                nerNode.innerHTML = String(tagHTML);
             }
         })
     });
@@ -35,6 +49,27 @@ function prepareForNewSummaries() {
     for (const article of Array.from(articles.children)) {
         const summary = article.getElementsByClassName("summary")[0];
         summary.innerHTML = summaryPlaceholder;
+    }
+}
+
+function prepareForNewNamedEntities() {
+    const nerPlaceholder = "<button class=\"btn\" disabled>\n" +
+        "<span class=\"spinner-grow spinner-grow-sm\" role=\"status\" aria-hidden=\"true\"></span>" +
+        "</button>" +
+        "<button class=\"btn\" disabled>\n" +
+        "<span class=\"spinner-grow spinner-grow-sm\" role=\"status\" aria-hidden=\"true\"></span>" +
+        "</button>\n" +
+        "<button class=\"btn\" disabled>\n" +
+        "<span class=\"spinner-grow spinner-grow-sm\" role=\"status\" aria-hidden=\"true\"></span>" +
+        "</button>\n" +
+        "<button class=\"btn\" disabled>\n" +
+        "<span class=\"spinner-grow spinner-grow-sm\" role=\"status\" aria-hidden=\"true\"></span>" +
+        "</button>";
+
+    const articles = document.getElementById("articles");
+    for (const article of Array.from(articles.children)) {
+        const ner = article.getElementsByClassName("named-entities")[0];
+        ner.innerHTML = nerPlaceholder;
     }
 }
 

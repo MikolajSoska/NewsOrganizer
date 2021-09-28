@@ -109,8 +109,9 @@ class DatabaseConnector(metaclass=Singleton):
             dataset_name = self.__get_model_dataset_name(model_id)
             tag_category_dict = self.__get_tag_category_dict(dataset_name)
             for entity in entities:
-                self.__cursor.execute(query, (tag_category_dict[entity.name], model_id, article_id, entity.position,
-                                              entity.length, entity.words))
+                self.__cursor.execute(query,
+                                      (tag_category_dict[entity.full_name], model_id, article_id, entity.position,
+                                       entity.length, entity.words))
         self.__database.commit()
 
     def add_new_model(self, model: NewsModel) -> None:
@@ -188,15 +189,24 @@ class DatabaseConnector(metaclass=Singleton):
         return {article_id: summary for article_id, summary in self.__cursor.fetchall()}
 
     def get_articles_named_entities(self, model_id: int) -> Dict[int, List[NamedEntity]]:
-        query = 'SELECT article_id, category_name, position, length, words FROM article_tag_map map INNER JOIN ' \
-                'tag_categories tc ON map.tag_category_id = tc.id WHERE model_id = %s'
+        query = 'SELECT article_id, category_name, short_name, position, length, words FROM article_tag_map map ' \
+                'INNER JOIN tag_categories tc ON map.tag_category_id = tc.id WHERE model_id = %s'
         named_entities = defaultdict(list)
         self.__cursor.execute(query, (model_id,))
-        for article_id, category_name, position, length, words in self.__cursor.fetchall():
-            named_entity = NamedEntity(category_name, position, length, words)
+        for article_id, category_name, short_name, position, length, words in self.__cursor.fetchall():
+            named_entity = NamedEntity(category_name, short_name, position, length, words)
             named_entities[article_id].append(named_entity)
 
         return named_entities
+
+    def get_articles_top_named_entities(self, model_id: int, top: int = 10) -> Dict[int, List[Tuple[str, str]]]:
+        named_entities = self.get_articles_named_entities(model_id)
+        top_named_entities = {}
+        for article_id, entities in named_entities.items():
+            counter = Counter((entity.words, entity.short_name) for entity in entities)
+            top_named_entities[article_id] = [entity for entity, _ in counter.most_common(top)]
+
+        return top_named_entities
 
     def get_article_tags_count(self) -> Dict[str, Counter]:
         query = 'SELECT DISTINCT article_id, words FROM article_tag_map map INNER JOIN tag_categories tc ON ' \

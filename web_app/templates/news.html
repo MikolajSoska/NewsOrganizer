@@ -41,7 +41,8 @@
                 summary=summaries[article.article_id],
                 source=article.news_site.name,
                 date=article.article_date,
-                image_url=article.image_url
+                image_url=article.image_url,
+                named_entities=named_entities[article.article_id]
             ) }}
         {% endfor %}
     </div>

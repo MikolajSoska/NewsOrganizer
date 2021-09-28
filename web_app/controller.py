@@ -22,8 +22,9 @@ def get_home():
 @app.route('/news', methods=['GET'])
 def get_articles():
     summaries = connector.get_articles_summaries(summarization_models[0].model_id)
-    return flask.render_template('news.html', articles=articles, summaries=summaries, tags_count=tags_count,
-                                 ner_models=ner_models,
+    named_entities = connector.get_articles_top_named_entities(ner_models[0].model_id)
+    return flask.render_template('news.html', articles=articles, summaries=summaries, named_entities=named_entities,
+                                 tags_count=tags_count, ner_models=ner_models,
                                  summarization_models=summarization_models)
 
 
@@ -47,6 +48,12 @@ def show_article(article_id: int):
 def get_summaries(model_id: int):
     summaries = connector.get_articles_summaries(model_id)
     return flask.jsonify(summaries)
+
+
+@app.route('/named-entities/<int:model_id>', methods=['GET'])
+def get_named_entities(model_id: int):
+    named_entities = connector.get_articles_top_named_entities(model_id)
+    return flask.jsonify(named_entities)
 
 
 app.run(host='127.0.0.1', port=5001)

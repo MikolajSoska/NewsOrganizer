@@ -167,18 +167,18 @@ class NewsPredictor:
 
             if position == 'B':
                 entity_begun = True
-                named_entities.append(NamedEntity(category_name, i, 1, word))  # Initial tag length is 1
+                named_entities.append(NamedEntity(category_name, tag_name, i, 1, word))  # Initial tag length is 1
             else:
                 if entity_begun:
-                    if category_name == named_entities[-1].name:
+                    if category_name == named_entities[-1].full_name:
                         # Increase entity length by one and add another word
                         named_entities[-1].length += 1
                         named_entities[-1].words += f' {word}'
                     else:
-                        named_entities.append(NamedEntity(category_name, i, 1, word))
+                        named_entities.append(NamedEntity(category_name, tag_name, i, 1, word))
                         entity_begun = False
                 else:
-                    named_entities.append(NamedEntity(category_name, i, 1, word))
+                    named_entities.append(NamedEntity(category_name, tag_name, i, 1, word))
 
         return named_entities
 

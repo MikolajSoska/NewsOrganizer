@@ -7,9 +7,9 @@
         crossorigin="anonymous">
 </script>
 <link rel="stylesheet" href="../static/styles/article_card.css">
-{% macro article_card(article_id, title, summary, source, date, image_url) %}
+{% macro article_card(article_id, title, summary, source, date, image_url, named_entities) %}
     <div class="card article-card" id="article-{{ article_id }}" onclick="openArticle({{ article_id }})">
-        <div class="row g-0 article-card-hover">
+        <div class="row g-0">
             <div class="col-md-3">
                 <img src={{ image_url }}, class="rounded-start img-fluid article-image" alt="Article image">
             </div>
@@ -18,6 +18,13 @@
                     <h5 class="card-title">{{ title }}</h5>
                     <p class="card-text"><small class="text-muted">Source: {{ source }}, Date: {{ date }}</small></p>
                     <div class="card-text summary"> {{ summary }}</div>
+                    <div class="card-text named-entities">
+                        {% for words, tag_name in named_entities %}
+                            <div class="article-card-entity tag-{{ tag_name.lower() }} btn">
+                                {{ words }} ({{ tag_name }})
+                            </div>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>

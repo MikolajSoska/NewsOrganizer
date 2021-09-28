@@ -19,7 +19,8 @@ class NewsSite:
 
 @dataclass(init=True, repr=True, eq=False)
 class NamedEntity:
-    name: str
+    full_name: str
+    short_name: str
     position: int
     length: int
     words: str
