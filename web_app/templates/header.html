@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="{{ url_for('static',filename='styles/header.css') }}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css" rel="stylesheet"
+      integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-/bQdsTh/da6pkI1MST/rWKFNjaCP5gBSY4sEBT38Q/9RBh9AH40zEOg7Hlq2THRZ"
+        crossorigin="anonymous">
+</script>
+<script src="{{ url_for('static',filename='scripts/header.js') }}"></script>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">NewsOrganizer</a>
+        <div class="d-flex justify-content-end header-container">
+            <div class="d-flex">
+                <p class="model-label">Current NER model:</p>
+                <div class="dropdown">
+                    <select class="form-select dropdown" aria-label=".form-select" id="ner-select"
+                            onchange="changeNerModel()">
+                        {% for model in ner_models %}
+                            <option value="ner-model-{{ model.model_id }}">{{ model.fullname }}
+                                ({{ model.dataset_name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex">
+                <p class="model-label">Current summarization model:</p>
+                <div class="dropdown">
+                    <select class="form-select dropdown" aria-label=".form-select" id="summarization-select"
+                            onchange="changeSummarizationModel()">
+                        {% for model in summarization_models %}
+                            <option value="summarization-model-{{ model.model_id }}">{{ model.fullname }}
+                                ({{ model.dataset_name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
