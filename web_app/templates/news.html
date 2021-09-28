@@ -4,36 +4,40 @@
     <meta charset="UTF-8">
     <title>NewsOrganizer</title>
     <link rel="stylesheet" href="{{ url_for('static',filename='styles/article_card.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static',filename='styles/news.css') }}">
     <script src="{{ url_for('static', filename='scripts/article_card.js') }}"></script>
 </head>
-<style>
-    .content {
-        display: flex;
-    }
-
-    .articles {
-        flex: 80%;
-    }
-
-    .tags {
-        flex: 20%;
-    }
-</style>
 <body>
 {% include 'header.html' %}
 {% from 'article_card.html' import article_card %}
-<div class="content">
-    <div class="tags">
-        {% for tag, counter in tags_count.items() %}
-            <strong>{{ tag }}</strong>
-            <ul>
-                {% for token, count in counter.most_common() %}
-                    <li>{{ token }} ({{ count }})</li>
-                {% endfor %}
-            </ul>
-        {% endfor %}
+<div id="content">
+    <div id="tags">
+        <div><h3>Most popular tags:</h3></div>
+        <div class="accordion accordion-flush" id="tags-menu">
+            {% for short_name, (tag_category, counts) in tags_count.items() %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="show-{{ short_name.lower() }}">
+                        <button class="accordion-button btn-light tag-header tag-{{ short_name.lower() }}"
+                                type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapse-{{ short_name.lower() }}"
+                                aria-expanded="true">
+                            {{ tag_category }}
+                        </button>
+                    </h2>
+                    <div id="collapse-{{ short_name.lower() }}"
+                         class="accordion-collapse collapse show"
+                         aria-labelledby="show-{{ short_name.lower() }}">
+                        {% for token, count in counts %}
+                            <button class="btn btn-outline-light tag-{{ short_name.lower() }} single-tag">
+                                {{ token }} <span class="badge bg-secondary">{{ count }}</span>
+                            </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
     </div>
-    <div class="articles" id="articles">
+    <div id="articles">
         {% for article in articles %}
             {{ article_card(
                 article_id=article.article_id,

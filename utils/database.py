@@ -208,23 +208,25 @@ class DatabaseConnector(metaclass=Singleton):
 
         return top_named_entities
 
-    def get_article_tags_count(self) -> Dict[str, Counter]:
+    def get_articles_tags_count(self, model_id: int, top: int = 10) -> Dict[str, Tuple[str, List[Tuple[str, int]]]]:
         query = 'SELECT DISTINCT article_id, words FROM article_tag_map map INNER JOIN tag_categories tc ON ' \
-                'map.tag_category_id = tc.id WHERE category_name = %s'
-        categories_name = self.__get_tag_categories()
+                'map.tag_category_id = tc.id WHERE category_name = %s AND model_id = %s'
+        categories_name = self.__get_tag_categories(model_id)
         tag_counts = {}
-        for category in categories_name:
-            self.__cursor.execute(query, (category,))
+        for category, short_name in categories_name:
+            self.__cursor.execute(query, (category, model_id))
             words = [word for _, word in self.__cursor.fetchall()]
-            tag_counts[category] = Counter(words)
+            tag_counts[short_name] = (category, Counter(words).most_common(top))
 
         return tag_counts
 
-    def __get_tag_categories(self) -> List[str]:
-        query = 'SELECT category_name FROM tag_categories'
+    def __get_tag_categories(self, model_id: int) -> List[Tuple[str, str]]:
+        query = 'SELECT category_name, short_name FROM tag_categories tc INNER JOIN datasets d ON ' \
+                'tc.dataset_id = d.id INNER JOIN news_models nm on d.id = nm.dataset_id WHERE nm.id = %s ' \
+                'ORDER BY short_name'
 
-        self.__cursor.execute(query)
-        return [name[0] for name in self.__cursor.fetchall()]
+        self.__cursor.execute(query, (model_id,))
+        return self.__cursor.fetchall()
 
     def __get_news_site(self, site_id: int) -> NewsSite:
         query = 'SELECT news_sites.name, news_sites.code FROM news_sites INNER JOIN countries ON ' \

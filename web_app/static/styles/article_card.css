@@ -18,40 +18,59 @@
 
 .tag-per {
     background-color: rgba(110, 53, 162, 0.77) !important;
+    border-color: rgba(110, 53, 162, 0.77) !important;
 }
 
 .tag-org {
     background-color: rgba(43, 133, 67, 0.8) !important;
+    border-color: rgba(43, 133, 67, 0.8) !important;
+
 }
 
 .tag-loc {
     background-color: #e7c011 !important;
+    border-color: #e7c011 !important;
+
 }
 
 .tag-misc {
     background-color: steelblue !important;
+    border-color: steelblue !important;
+
 }
 
 .tag-geo {
     background-color: #e7c011 !important;
+    border-color: #e7c011 !important;
+
 }
 
 .tag-gpe {
     background-color: #2daaee !important;
+    border-color: #2daaee !important;
+
 }
 
 .tag-tim {
     background-color: #451fa9 !important;
+    border-color: #451fa9 !important;
+
 }
 
 .tag-art {
     background-color: darkslategrey !important;
+    border-color: darkslategrey !important;
+
 }
 
 .tag-eve {
     background-color: hotpink !important;
+    border-color: hotpink !important;
+
 }
 
 .tag-nat {
     background-color: #cc1111 !important;
+    border-color: #cc1111 !important;
+
 }

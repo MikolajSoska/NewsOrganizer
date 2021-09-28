@@ -14,23 +14,44 @@ $(document).ready(function () {
         })
     });
     $("#ner-select").on("change", function () {
-        prepareForNewNamedEntities()
+        prepareForNewTagCounts();
+        prepareForNewNamedEntities();
         const nerSelect = document.getElementById("ner-select");
         const modelID = nerSelect.value.replace("ner-model-", "");
         const baseURL = window.location.origin;
 
-        $.getJSON(baseURL + "/named-entities/" + modelID, function (namedEntities) {
-            for (const [articleID, named_entities] of Object.entries(namedEntities)) {
-                let tagHTML = "";
-                for (const [words, entity] of named_entities) {
-                    tagHTML += "<div class=\"article-card-entity tag-" + entity.toLowerCase() + " btn\">";
-                    tagHTML += words + " (" + entity + ")</div>";
+        $.getJSON(baseURL + '/tags-count/' + modelID, function (tagsCount) {
+            let countHTML = "";
+            for (const [tagShort, [tagCategory, counts]] of Object.entries(tagsCount)) {
+                const tagLower = tagShort.toLowerCase();
+                countHTML += "<div class=\"accordion-item\"><h2 class=\"accordion-header\" id=\"show-" + tagLower;
+                countHTML += "\"><button class=\"accordion-button btn-light tag-header tag-" + tagLower;
+                countHTML += "\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#collapse-" + tagLower;
+                countHTML += "\" aria-expanded=\"true\">" + tagCategory + "</button></h2><div id=\"collapse-";
+                countHTML += tagLower + "\" class=\"accordion-collapse collapse show\" aria-labelledby=\"show-"
+                countHTML += tagLower + "\">";
+                for (const [token, count] of counts) {
+                    countHTML += "<button class=\"btn btn-outline-light tag-" + tagLower + " single-tag\">" +
+                        token + " <span class=\"badge bg-secondary\">" + count + "</span></button>"
                 }
-                const article = document.getElementById("article-" + articleID);
-                const nerNode = article.getElementsByClassName("named-entities")[0];
-                nerNode.innerHTML = String(tagHTML);
+                countHTML += "</div></div>"
             }
-        })
+            console.log(countHTML)
+            const tagsMenu = document.getElementById("tags-menu");
+            tagsMenu.innerHTML = countHTML;
+            $.getJSON(baseURL + "/named-entities/" + modelID, function (namedEntities) {
+                for (const [articleID, named_entities] of Object.entries(namedEntities)) {
+                    let tagHTML = "";
+                    for (const [words, entity] of named_entities) {
+                        tagHTML += "<div class=\"article-card-entity tag-" + entity.toLowerCase() + " btn\">";
+                        tagHTML += words + "<span class=\"badge\">" + entity + "</span></div>";
+                    }
+                    const article = document.getElementById("article-" + articleID);
+                    const nerNode = article.getElementsByClassName("named-entities")[0];
+                    nerNode.innerHTML = String(tagHTML);
+                }
+            })
+        });
     });
 });
 
@@ -50,6 +71,18 @@ function prepareForNewSummaries() {
         const summary = article.getElementsByClassName("summary")[0];
         summary.innerHTML = summaryPlaceholder;
     }
+}
+
+function prepareForNewTagCounts() {
+    const countsPlaceholder =
+        "<div class=\"placeholder-wave\">\n" +
+        " <span class=\"placeholder col-12 placeholder-lg\"></span>" +
+        " <span class=\"placeholder col-12 placeholder-lg\"></span>" +
+        " <span class=\"placeholder col-12 placeholder-lg\"></span>" +
+        " <span class=\"placeholder col-12 placeholder-lg\"></span>";
+
+    const tagsMenu = document.getElementById("tags-menu");
+    tagsMenu.innerHTML = countsPlaceholder;
 }
 
 function prepareForNewNamedEntities() {

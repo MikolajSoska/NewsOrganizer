@@ -21,7 +21,7 @@
                     <div class="card-text named-entities">
                         {% for words, tag_name in named_entities %}
                             <div class="article-card-entity tag-{{ tag_name.lower() }} btn">
-                                {{ words }} ({{ tag_name }})
+                                {{ words }} <span class="badge">{{ tag_name }}</span>
                             </div>
                         {% endfor %}
                     </div>
