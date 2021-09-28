@@ -38,6 +38,7 @@ class NewsGetter:
                     continue
 
                 articles.append(NewsArticle(
+                    article_id=0,
                     title=article['title'],
                     content=' '.join(content),
                     article_url=article['url'],

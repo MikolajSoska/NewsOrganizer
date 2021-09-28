@@ -27,6 +27,7 @@ class NamedEntity:
 
 @dataclass(init=True, repr=True, eq=False)
 class NewsArticle:
+    article_id: int
     title: str
     content: str  # TODO: change back to list with mechanism to restore division into paragraphs
     article_url: str

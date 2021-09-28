@@ -1,0 +1,12 @@
+.article-card {
+    margin: 1em;
+}
+
+.article-card:hover {
+    cursor: pointer;
+    opacity: 75%;
+}
+
+.article-image {
+    width: 100%;
+}

@@ -18,25 +18,29 @@
     }
 </style>
 <body>
+{% include 'header.html' %}
+{% from 'article_card.html' import article_card %}
 <div class="content">
     <div class="tags">
         {% for tag, counter in tags_count.items() %}
-        <strong>{{ tag }}</strong>
-        <ul>
-            {% for token, count in counter.most_common() %}
-            <li>{{ token }} ({{ count }})</li>
-            {% endfor %}
-        </ul>
+            <strong>{{ tag }}</strong>
+            <ul>
+                {% for token, count in counter.most_common() %}
+                    <li>{{ token }} ({{ count }})</li>
+                {% endfor %}
+            </ul>
         {% endfor %}
     </div>
     <div class="articles">
         {% for article in articles %}
-        <a href=http://localhost:5001/article/{{ loop.index }}><h4>{{ article.title }}</h4></a>
-        <p>{{ article.article_date }}, {{ article.news_site.name }}</p>
-        <div>
-            <img src={{ article.image_url }} height="100px" width="auto">
-            <p><strong>Summary:</strong>{{ article.summary }}</p>
-        </div>
+            {{ article_card(
+                article_id=article.article_id,
+                title=article.title,
+                summary=summaries[article.article_id],
+                source=article.news_site.name,
+                date=article.article_date,
+                image_url=article.image_url
+            ) }}
         {% endfor %}
     </div>
 </div>

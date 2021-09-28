@@ -45,7 +45,7 @@ class NewsPredictor:
     @staticmethod
     def __get_models(datasets: List[str]) -> Dict[str, List[NewsModel]]:
         connector = DatabaseConnector()
-        return {dataset: connector.get_models(dataset) for dataset in datasets}
+        return {dataset: connector.get_models_by_dataset(dataset) for dataset in datasets}
 
     def __create_ner_vocabs(self, path_to_vocabs: Path) -> Dict[str, VocabWithChars]:
         vocabs = {}

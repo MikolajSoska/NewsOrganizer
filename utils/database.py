@@ -33,14 +33,14 @@ class DatabaseConnector(metaclass=Singleton):
         return [NewsSite(name, code, country) for name, code in self.__cursor.fetchall()]
 
     def get_datasets_identifiers(self, task_name: str) -> List[str]:
-        query = 'SELECT id_name from datasets d INNER JOIN tasks t on d.task_id = t.id WHERE t.name = %s'
+        query = 'SELECT id_name FROM datasets d INNER JOIN tasks t on d.task_id = t.id WHERE t.name = %s'
         self.__cursor.execute(query, (task_name,))
 
         return [dataset[0] for dataset in self.__cursor.fetchall()]
 
-    def get_models(self, dataset_identifier: str) -> List[NewsModel]:
+    def get_models_by_dataset(self, dataset_identifier: str) -> List[NewsModel]:
         query = 'SELECT nm.id, model_name, model_identifier, class_name, constructor_args,dataset_args, batch_size ' \
-                'FROM news_models nm INNER JOIN models m ON nm.model_id = m.id INNER JOIN datasets d on ' \
+                'FROM news_models nm INNER JOIN models m ON nm.model_id = m.id INNER JOIN datasets d ON ' \
                 'nm.dataset_id = d.id WHERE d.id_name = %s'
         self.__cursor.execute(query, (dataset_identifier,))
 
@@ -56,6 +56,31 @@ class DatabaseConnector(metaclass=Singleton):
                 dataset_args=pickle.loads(dataset_args),
                 batch_size=batch_size,
                 dataset_name=dataset_identifier
+            )
+            models.append(model)
+
+        return models
+
+    def get_models_by_task(self, task_name: str, full_dataset_name: bool = False) -> List[NewsModel]:
+        dataset_name_column = 'full_name' if full_dataset_name else 'id_name'
+        query = f'SELECT nm.id, model_name, model_identifier, class_name, constructor_args, dataset_args, ' \
+                f'batch_size, d.{dataset_name_column} FROM news_models nm INNER JOIN models m ON nm.model_id = m.id ' \
+                f'INNER JOIN datasets d ON nm.dataset_id = d.id INNER JOIN tasks t on d.task_id = t.id ' \
+                f'WHERE t.name = %s ORDER BY m.model_name'
+        self.__cursor.execute(query, (task_name,))
+
+        models = []
+        data = self.__cursor.fetchall()
+        for model_id, model_name, name_id, class_name, constructor_args, dataset_args, batch_size, dataset_name in data:
+            model = NewsModel(
+                model_id=model_id,
+                fullname=model_name,
+                class_name=class_name,
+                name_identifier=name_id,
+                constructor_args=pickle.loads(constructor_args),
+                dataset_args=pickle.loads(dataset_args),
+                batch_size=batch_size,
+                dataset_name=dataset_name
             )
             models.append(model)
 
@@ -151,7 +176,7 @@ class DatabaseConnector(metaclass=Singleton):
         articles = []
         for article_id, title, content, url, date, site_id, image_url in self.__cursor.fetchall():
             news_site = self.__get_news_site(site_id)
-            article = NewsArticle(title, content, url, date, news_site, image_url)
+            article = NewsArticle(article_id, title, content, url, date, news_site, image_url)
             articles.append(article)
 
         return articles
@@ -162,7 +187,7 @@ class DatabaseConnector(metaclass=Singleton):
 
         return {article_id: summary for article_id, summary in self.__cursor.fetchall()}
 
-    def articles_named_entities(self, model_id: int) -> Dict[int, List[NamedEntity]]:
+    def get_articles_named_entities(self, model_id: int) -> Dict[int, List[NamedEntity]]:
         query = 'SELECT article_id, category_name, position, length, words FROM article_tag_map map INNER JOIN ' \
                 'tag_categories tc ON map.tag_category_id = tc.id WHERE model_id = %s'
         named_entities = defaultdict(list)
