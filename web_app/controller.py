@@ -10,6 +10,11 @@ articles = connector.get_articles()
 word_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
 
 
+@app.route('/', methods=['GET'])
+def get_home():
+    return flask.redirect(flask.url_for('get_articles'))
+
+
 @app.route('/news', methods=['GET'])
 def get_articles():
     tags_count = connector.get_article_tags_count()
