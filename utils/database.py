@@ -171,9 +171,18 @@ class DatabaseConnector(metaclass=Singleton):
 
         return self.__cursor.fetchone()[0]
 
-    def get_articles(self) -> List[NewsArticle]:
-        query = 'SELECT * FROM news_articles'
-        self.__cursor.execute(query)
+    def get_articles(self, model_id: int = None, tags: Tuple[str, ...] = ()) -> List[NewsArticle]:
+        if model_id is None:
+            query = 'SELECT * FROM news_articles'
+            self.__cursor.execute(query)
+
+        else:
+            tags_str = ','.join(f'"{tag}"' for tag in tags)
+            query = f'SELECT DISTINCT na.id, title, content, article_url, article_date, site_id, image_url ' \
+                    f'FROM news_articles na INNER JOIN article_tag_map atm ON na.id = atm.article_id WHERE ' \
+                    f'atm.model_id = %s AND words IN ({tags_str})'
+            self.__cursor.execute(query, (model_id,))
+
         articles = []
         for article_id, title, content, url, date, site_id, image_url in self.__cursor.fetchall():
             news_site = self.__get_news_site(site_id)
@@ -181,6 +190,14 @@ class DatabaseConnector(metaclass=Singleton):
             articles.append(article)
 
         return articles
+
+    def get_single_article(self, article_id: int) -> NewsArticle:
+        query = 'SELECT * FROM news_articles WHERE id = %s'
+        self.__cursor.execute(query, (article_id,))
+        article_id, title, content, url, date, site_id, image_url = self.__cursor.fetchone()
+        news_site = self.__get_news_site(site_id)
+
+        return NewsArticle(article_id, title, content, url, date, news_site, image_url)
 
     def get_articles_summaries(self, model_id: int) -> Dict[int, str]:
         query = 'SELECT article_id, content FROM summaries WHERE model_id = %s'

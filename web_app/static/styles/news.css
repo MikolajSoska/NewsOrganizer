@@ -36,7 +36,15 @@
     color: white !important;
 }
 
-.single-tag:not(:hover) {
+.single-tag:active {
+    color: white !important;
+}
+
+.single-tag:not(:hover):not(.active) {
     color: black !important;
     background-color: white !important;
+}
+
+.single-tag.active {
+    color: white !important;
 }

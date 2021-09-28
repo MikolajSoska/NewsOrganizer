@@ -6,8 +6,6 @@ from utils.general import tokenize_text_content
 
 app = flask.Flask(__name__)
 connector = DatabaseConnector()
-articles = connector.get_articles()
-articles_map = {article.article_id: article for article in articles}
 word_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
 ner_models = connector.get_models_by_task('Named Entity Recognition', full_dataset_name=True)
 summarization_models = connector.get_models_by_task('Abstractive Summarization', full_dataset_name=True)
@@ -20,6 +18,7 @@ def get_home():
 
 @app.route('/news', methods=['GET'])
 def get_articles():
+    articles = connector.get_articles()
     summaries = connector.get_articles_summaries(summarization_models[0].model_id)
     named_entities = connector.get_articles_top_named_entities(ner_models[0].model_id)
     tags_count = connector.get_articles_tags_count(ner_models[0].model_id)
@@ -28,9 +27,21 @@ def get_articles():
                                  summarization_models=summarization_models)
 
 
+@app.route('/news-filter', methods=['GET'])
+def get_articles_filter():
+    model_id = flask.request.args.get('model_id', type=int)
+    tags = flask.request.args.get('tags', type=str)
+    if len(tags) == 0:
+        model_id = None  # Disable filtering when no tag is provided
+    tags = tuple(tags.split('\t'))
+
+    articles = connector.get_articles(model_id, tags)
+    return flask.jsonify([article.article_id for article in articles])
+
+
 @app.route('/article/<int:article_id>', methods=['GET'])
 def show_article(article_id: int):
-    article = articles_map[article_id]
+    article = connector.get_single_article(article_id)
     tokens = tokenize_text_content(article.content, word_tokenizer=word_tokenizer)
 
     for tag, position, length, _ in article.named_entities:

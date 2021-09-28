@@ -1,9 +1,43 @@
+let filters = [];
+let nerModelID = null;
+const baseURL = window.location.origin;
+
+function filterArticles(button) {
+    const tag = button.currentTarget;
+    const tokens = tag.textContent.trim().split(" ")
+    tokens.pop()
+    const token = tokens.join(" ")
+    if ($(tag).hasClass("active")) {
+        $(tag).removeClass("active");
+        filters.splice(filters.indexOf(token))
+    } else {
+        $(tag).addClass("active");
+        filters.push(token);
+    }
+    $.getJSON(baseURL + '/news-filter', {
+        'model_id': nerModelID,
+        'tags': filters.join('\t'),
+    }, function (articles) {
+        const articlesNodes = document.getElementById("articles");
+        console.log(articles)
+        for (const articleNode of articlesNodes.children) {
+            const articleID = parseInt(articleNode.id.replace("article-", ""));
+            if (!(articles.includes(articleID))) {
+                $(articleNode).hide();
+            } else {
+                $(articleNode).show();
+            }
+        }
+    })
+}
+
 $(document).ready(function () {
+    nerModelID = document.getElementById("ner-select").value.replace("ner-model-", "");
+    $(".single-tag").on('click', filterArticles);
     $("#summarization-select").on("change", function () {
         prepareForNewSummaries();
         const summarizationSelect = document.getElementById("summarization-select");
         const modelID = summarizationSelect.value.replace("summarization-model-", "");
-        const baseURL = window.location.origin;
 
         $.getJSON(baseURL + "/summaries/" + modelID, function (summaries) {
             for (const [articleID, summary] of Object.entries(summaries)) {
@@ -18,7 +52,8 @@ $(document).ready(function () {
         prepareForNewNamedEntities();
         const nerSelect = document.getElementById("ner-select");
         const modelID = nerSelect.value.replace("ner-model-", "");
-        const baseURL = window.location.origin;
+        filters = [];
+        nerModelID = modelID
 
         $.getJSON(baseURL + '/tags-count/' + modelID, function (tagsCount) {
             let countHTML = "";
@@ -36,9 +71,9 @@ $(document).ready(function () {
                 }
                 countHTML += "</div></div>"
             }
-            console.log(countHTML)
             const tagsMenu = document.getElementById("tags-menu");
             tagsMenu.innerHTML = countHTML;
+            $(".single-tag").on('click', filterArticles);
             $.getJSON(baseURL + "/named-entities/" + modelID, function (namedEntities) {
                 for (const [articleID, named_entities] of Object.entries(namedEntities)) {
                     let tagHTML = "";
