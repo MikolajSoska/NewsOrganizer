@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>NewsOrganizer</title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='styles/article_card.css') }}">
+    <script src="{{ url_for('static', filename='scripts/article_card.js') }}"></script>
 </head>
 <style>
     .content {
@@ -31,7 +33,7 @@
             </ul>
         {% endfor %}
     </div>
-    <div class="articles">
+    <div class="articles" id="articles">
         {% for article in articles %}
             {{ article_card(
                 article_id=article.article_id,

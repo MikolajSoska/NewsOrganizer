@@ -7,8 +7,9 @@
         integrity="sha384-/bQdsTh/da6pkI1MST/rWKFNjaCP5gBSY4sEBT38Q/9RBh9AH40zEOg7Hlq2THRZ"
         crossorigin="anonymous">
 </script>
+<script src="{{ url_for('static', filename='scripts/jquery-3.5.1.min.js') }}"></script>
 <script src="{{ url_for('static',filename='scripts/header.js') }}"></script>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar sticky-top navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="#">NewsOrganizer</a>
         <div class="d-flex justify-content-end header-container">
@@ -29,7 +30,7 @@
                 <p class="model-label">Current summarization model:</p>
                 <div class="dropdown">
                     <select class="form-select dropdown" aria-label=".form-select" id="summarization-select"
-                            onchange="changeSummarizationModel()">
+                    >
                         {% for model in summarization_models %}
                             <option value="summarization-model-{{ model.model_id }}">{{ model.fullname }}
                                 ({{ model.dataset_name }})

@@ -8,8 +8,6 @@
 </script>
 <link rel="stylesheet" href="../static/styles/article_card.css">
 {% macro article_card(article_id, title, summary, source, date, image_url) %}
-    <link rel="stylesheet" href="{{ url_for('static',filename='styles/article_card.css') }}">
-    <script src="{{ url_for('static', filename='scripts/article_card.js') }}"></script>
     <div class="card article-card" id="article-{{ article_id }}" onclick="openArticle({{ article_id }})">
         <div class="row g-0 article-card-hover">
             <div class="col-md-3">
@@ -19,7 +17,7 @@
                 <div class="card-body">
                     <h5 class="card-title">{{ title }}</h5>
                     <p class="card-text"><small class="text-muted">Source: {{ source }}, Date: {{ date }}</small></p>
-                    <p class="card-text"> {{ summary }}</p>
+                    <div class="card-text summary"> {{ summary }}</div>
                 </div>
             </div>
         </div>

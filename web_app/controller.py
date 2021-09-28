@@ -8,9 +8,10 @@ app = flask.Flask(__name__)
 connector = DatabaseConnector()
 articles = connector.get_articles()
 articles_map = {article.article_id: article for article in articles}
-summaries = connector.get_articles_summaries(7)
-named_entities = connector.get_articles_named_entities(1)
 word_tokenizer = get_tokenizer('spacy', language='en_core_web_sm')
+ner_models = connector.get_models_by_task('Named Entity Recognition', full_dataset_name=True)
+summarization_models = connector.get_models_by_task('Abstractive Summarization', full_dataset_name=True)
+tags_count = connector.get_article_tags_count()
 
 
 @app.route('/', methods=['GET'])
@@ -20,9 +21,7 @@ def get_home():
 
 @app.route('/news', methods=['GET'])
 def get_articles():
-    tags_count = connector.get_article_tags_count()
-    ner_models = connector.get_models_by_task('Named Entity Recognition', full_dataset_name=True)
-    summarization_models = connector.get_models_by_task('Abstractive Summarization', full_dataset_name=True)
+    summaries = connector.get_articles_summaries(summarization_models[0].model_id)
     return flask.render_template('news.html', articles=articles, summaries=summaries, tags_count=tags_count,
                                  ner_models=ner_models,
                                  summarization_models=summarization_models)
@@ -42,6 +41,12 @@ def show_article(article_id: int):
     content = ' '.join(tokens)
 
     return flask.render_template('article.html', article=article, content=content)
+
+
+@app.route('/summaries/<int:model_id>', methods=['GET'])
+def get_summaries(model_id: int):
+    summaries = connector.get_articles_summaries(model_id)
+    return flask.jsonify(summaries)
 
 
 app.run(host='127.0.0.1', port=5001)
