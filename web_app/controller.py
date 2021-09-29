@@ -39,20 +39,21 @@ def get_articles_filter():
     return flask.jsonify([article.article_id for article in articles])
 
 
-@app.route('/article/<int:article_id>', methods=['GET'])
-def show_article(article_id: int):
+@app.route('/article-entities/<int:article_id>/<int:model_id>', methods=['GET'])
+def get_articles_entities(article_id: int, model_id: int):
     article = connector.get_single_article(article_id)
+    named_entities = connector.get_article_named_entities(model_id, article_id)
     tokens = tokenize_text_content(article.content, word_tokenizer=word_tokenizer)
 
-    for tag, position, length, _ in article.named_entities:
-        start_token = tokens[position]
-        tokens[position] = f'<strong>{start_token}'
-        end_token = tokens[position + length - 1]
-        tokens[position + length - 1] = f'{end_token} ({tag})</strong>'
+    for entity in named_entities:
+        start_token = tokens[entity.position]
+        tokens[entity.position] = f'<div class="btn btn-sm article-tag tag-{entity.short_name.lower()}">{start_token}'
+        last_position = entity.position + entity.length - 1
+        tokens[last_position] = f'{tokens[last_position]} <span class="badge">{entity.short_name}</span></div>'
 
     content = ' '.join(tokens)
 
-    return flask.render_template('article.html', article=article, content=content)
+    return flask.jsonify(content)
 
 
 @app.route('/summaries/<int:model_id>', methods=['GET'])

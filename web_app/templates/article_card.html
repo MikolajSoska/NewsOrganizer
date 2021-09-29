@@ -7,16 +7,17 @@
         crossorigin="anonymous">
 </script>
 <link rel="stylesheet" href="../static/styles/article_card.css">
-{% macro article_card(article_id, title, summary, source, date, image_url, named_entities) %}
-    <div class="card article-card" id="article-{{ article_id }}" onclick="openArticle({{ article_id }})">
+{% macro article_card(article, summary, named_entities) %}
+    <div class="card article-card" id="article-{{ article.article_id }}">
         <div class="row g-0">
             <div class="col-md-3">
-                <img src={{ image_url }}, class="rounded-start img-fluid article-image" alt="Article image">
+                <img src={{ article.image_url }}, class="rounded-start img-fluid article-image" alt="Article image">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
-                    <h5 class="card-title">{{ title }}</h5>
-                    <p class="card-text"><small class="text-muted">Source: {{ source }}, Date: {{ date }}</small></p>
+                    <h5 class="card-title">{{ article.title }}</h5>
+                    <p class="card-text"><small class="text-muted">Source: {{ article.news_site.name }},
+                        Date: {{ article.article_date }}</small></p>
                     <div class="card-text summary"> {{ summary }}</div>
                     <div class="card-text named-entities">
                         {% for words, tag_name in named_entities %}
@@ -27,6 +28,40 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-1 align-self-start">
+                <button class="btn btn-outline-dark open-article" data-bs-toggle="modal"
+                        id="open-article-{{ article.article_id }}" data-bs-target="#modal-{{ article.article_id }}">
+                    <strong>OPEN ></strong></button>
+            </div>
+        </div>
+        <div class="modal fade" id="modal-{{ article.article_id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-fullscreen article-modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ article.title }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body d-flex flex-column align-items-center">
+                        <img src="{{ article.image_url }}" alt="Article image"
+                             class="img-thumbnail article-full-image"/>
+                        <hr class="article-divider"/>
+
+                        <div class="d-flex align-items-center justify-content-center details-container">
+                            <button class="btn btn-outline-dark article-details">{{ article.news_site.name }}</button>
+                            <button class="btn btn-outline-dark article-details">{{ article.article_date }}</button>
+                        </div>
+                        <hr class="article-divider"/>
+                        <div class=article-body id="article-content-{{ article.article_id }}">
+                            {{ article.content }}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <a role="button" class="btn btn-secondary" href=" {{ article.article_url }}">Original
+                            article</a>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
 {% endmacro %}

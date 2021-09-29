@@ -19,7 +19,6 @@ function filterArticles(button) {
         'tags': filters.join('\t'),
     }, function (articles) {
         const articlesNodes = document.getElementById("articles");
-        console.log(articles)
         for (const articleNode of articlesNodes.children) {
             const articleID = parseInt(articleNode.id.replace("article-", ""));
             if (!(articles.includes(articleID))) {
@@ -88,6 +87,12 @@ $(document).ready(function () {
             })
         });
     });
+    $(".open-article").on("click", function (button) {
+        const articleID = parseInt(button.currentTarget.id.replace("open-article-", ""));
+        $.getJSON(baseURL + "/article-entities/" + articleID + "/" + nerModelID, function (content) {
+            $('#article-content-' + articleID).html(content);
+        });
+    });
 });
 
 function prepareForNewSummaries() {
@@ -103,7 +108,9 @@ function prepareForNewSummaries() {
 
     const articles = document.getElementById("articles");
     for (const article of Array.from(articles.children)) {
+        console.log(article)
         const summary = article.getElementsByClassName("summary")[0];
+        console.log(summary)
         summary.innerHTML = summaryPlaceholder;
     }
 }

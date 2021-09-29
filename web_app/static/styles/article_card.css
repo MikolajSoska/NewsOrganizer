@@ -2,11 +2,6 @@
     margin: 1em;
 }
 
-.article-card:hover {
-    cursor: pointer;
-    opacity: 75%;
-}
-
 .article-image {
     width: 100%;
 }
@@ -14,6 +9,57 @@
 .article-card-entity {
     margin: 5px 1px !important;
     color: white !important;
+}
+
+.open-article {
+    margin: 10% 5%;
+}
+
+.open-article:hover {
+    opacity: 80%;
+}
+
+.article-full-image {
+    width: 50%;
+}
+
+.article-body, .details-container {
+    width: 85%;
+}
+
+.article-modal {
+    padding: 0 5% !important;
+}
+
+.article-details {
+    margin: 1% 1%;
+}
+
+.article-details:hover {
+    cursor: default !important;
+}
+
+.article-details:focus {
+    box-shadow: none !important;
+}
+
+.article-divider {
+    width: 70%;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.article-tag {
+    border: none !important;
+    color: white !important;
+    padding: 0 6px !important;
+}
+
+.article-tag:hover {
+    cursor: default !important;
+    opacity: 80% !important;
 }
 
 .tag-per {

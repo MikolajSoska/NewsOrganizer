@@ -216,6 +216,17 @@ class DatabaseConnector(metaclass=Singleton):
 
         return named_entities
 
+    def get_article_named_entities(self, model_id: int, article_id: int) -> List[NamedEntity]:
+        query = 'SELECT category_name, short_name, position, length, words FROM article_tag_map map ' \
+                'INNER JOIN tag_categories tc ON map.tag_category_id = tc.id WHERE model_id = %s AND article_id = %s'
+        self.__cursor.execute(query, (model_id, article_id))
+        named_entities = []
+        for category_name, short_name, position, length, words in self.__cursor.fetchall():
+            named_entity = NamedEntity(category_name, short_name, position, length, words)
+            named_entities.append(named_entity)
+
+        return named_entities
+
     def get_articles_top_named_entities(self, model_id: int, top: int = 10) -> Dict[int, List[Tuple[str, str]]]:
         named_entities = self.get_articles_named_entities(model_id)
         top_named_entities = {}
