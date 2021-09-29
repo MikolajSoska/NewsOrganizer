@@ -93,7 +93,7 @@ class DatabaseConnector(metaclass=Singleton):
 
         query = 'INSERT INTO news_articles VALUES (0, %s, %s, %s, %s, %s, %s)'
         self.__cursor.execute(query, (article.title, article.content, article.article_url,
-                                      article.article_date, site_id, article.image_url, article.summaries))
+                                      article.article_date, site_id, article.image_url))
         self.__database.commit()
         return self.__cursor.lastrowid
 
