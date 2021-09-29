@@ -1,12 +1,16 @@
 import argparse
+import itertools
 import json
 import random
 from pathlib import Path
 from typing import List, Tuple, Dict, Callable, Any
 
 import torch
+from nltk.tokenize.treebank import TreebankWordDetokenizer
 from torch import Tensor
 from torchtext.vocab import Vocab
+
+__detokenizer = TreebankWordDetokenizer()
 
 
 class JSONPathEncoder(json.JSONEncoder):
@@ -55,7 +59,7 @@ def convert_input_to_device(inputs: Tuple[Any, ...], device: torch.device) -> Tu
     return tuple(inputs_in_device)
 
 
-def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
+def tensor_to_string(vocab: Vocab, tensor: Tensor, detokenize: bool = False) -> str:
     tokens = []
     if len(tensor.shape) == 0:  # If tensor is 0-dimensional
         tensor = torch.unsqueeze(tensor, 0)
@@ -66,6 +70,17 @@ def tensor_to_string(vocab: Vocab, tensor: Tensor) -> str:
         except IndexError:
             token = vocab.UNK
         tokens.append(token)
+
+    if detokenize:
+        sentences = []
+        for result, group in itertools.groupby(tokens, lambda item: item == '.'):
+            if not result:
+                sentence = list(group) + ['.']
+                if '<eos>' in sentence:
+                    sentence.remove('<eos>')
+                sentence = __detokenizer.detokenize(sentence)
+                sentences.append(sentence.capitalize())
+        tokens = sentences
 
     return ' '.join(tokens)
 

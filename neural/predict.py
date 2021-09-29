@@ -217,7 +217,7 @@ class NewsPredictor:
     def __get_article_summary(summary_tensor: torch.Tensor, vocab: Vocab, oov_list: List[str]) -> str:
         summary_tensor = utils.remove_unnecessary_padding(summary_tensor)
         utils.add_words_to_vocab(vocab, oov_list)
-        summary = utils.tensor_to_string(vocab, summary_tensor)
+        summary = utils.tensor_to_string(vocab, summary_tensor, detokenize=True)
         utils.remove_words_from_vocab(vocab, oov_list)
 
         return summary
