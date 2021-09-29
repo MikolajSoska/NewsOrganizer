@@ -5,6 +5,7 @@
     <title>NewsOrganizer</title>
     <link rel="stylesheet" href="{{ url_for('static',filename='styles/article_card.css') }}">
     <link rel="stylesheet" href="{{ url_for('static',filename='styles/news.css') }}">
+    <link href='https://fonts.googleapis.com/css?family=Lato' rel='stylesheet'>
     <script src="{{ url_for('static', filename='scripts/jquery-3.5.1.min.js') }}"></script>
     <script src="{{ url_for('static', filename='scripts/article_card.js') }}"></script>
     <script src="{{ url_for('static', filename='scripts/news.js') }}"></script>
@@ -13,7 +14,7 @@
 {% include 'header.html' %}
 {% from 'article_card.html' import article_card %}
 <div id="content">
-    <div id="tags">
+    <div id="tags" class="card d-inline">
         <div><h3>Most popular tags:</h3></div>
         <div class="accordion accordion-flush" id="tags-menu">
             {% for short_name, (tag_category, counts) in tags_count.items() %}
@@ -23,7 +24,7 @@
                                 type="button" data-bs-toggle="collapse"
                                 data-bs-target="#collapse-{{ short_name.lower() }}"
                                 aria-expanded="true">
-                            {{ tag_category }}
+                            <strong>{{ tag_category }}</strong>
                         </button>
                     </h2>
                     <div id="collapse-{{ short_name.lower() }}"

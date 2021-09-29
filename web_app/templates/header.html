@@ -16,7 +16,7 @@
             <div class="d-flex">
                 <p class="model-label">Current NER model:</p>
                 <div class="dropdown">
-                    <select class="form-select dropdown" aria-label=".form-select" id="ner-select">
+                    <select class="form-select dropdown model-select" aria-label=".form-select" id="ner-select">
                         {% for model in ner_models %}
                             <option value="ner-model-{{ model.model_id }}">{{ model.fullname }}
                                 ({{ model.dataset_name }})
@@ -28,7 +28,8 @@
             <div class="d-flex">
                 <p class="model-label">Current summarization model:</p>
                 <div class="dropdown">
-                    <select class="form-select dropdown" aria-label=".form-select" id="summarization-select">
+                    <select class="form-select dropdown model-select" aria-label=".form-select"
+                            id="summarization-select">
                         {% for model in summarization_models %}
                             <option value="summarization-model-{{ model.model_id }}">{{ model.fullname }}
                                 ({{ model.dataset_name }})

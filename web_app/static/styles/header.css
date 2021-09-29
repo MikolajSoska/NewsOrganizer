@@ -7,3 +7,7 @@
 .header-container {
     width: 100%;
 }
+
+.model-select:hover {
+    cursor: pointer;
+}
